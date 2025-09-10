@@ -1,0 +1,17 @@
+name: Trigger CI Pipeline
+
+on:
+    push:
+        branches: [master]
+
+jobs:
+    trigger:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Trigger Backend Build in CI
+              run: |
+                curl -X POST \
+                -H "Authorization: token ${{ secrets.CI_TRIGGER_TOKEN }}" \
+                -H "Accept: application/vnd.github.v3+json" \
+                https://api.github.com/repos/linfedCS/server-manager-deploy/dispatches \
+                -d '{"event_type":"frontend_build", "client_payload": {"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}}'
