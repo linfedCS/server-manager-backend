@@ -8,10 +8,14 @@ jobs:
     trigger:
         runs-on: ubuntu-latest
         steps:
+            - name: Get Short SHA
+              id: vars
+              run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
             - name: Trigger Backend Build in CI
               run: |
                 curl -X POST \
                 -H "Authorization: token ${{ secrets.CI_TRIGGER_TOKEN }}" \
                 -H "Accept: application/vnd.github.v3+json" \
                 https://api.github.com/repos/linfedCS/server-manager-deploy/dispatches \
-                -d '{"event_type":"backend_build", "client_payload": {"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}}'
+                -d '{"event_type":"backend_build", "client_payload": {"ref": "${{ github.ref }}", "sha": "${{ steps.vars.outputs.sha_short }}"}}'
