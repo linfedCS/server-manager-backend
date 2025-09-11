@@ -201,38 +201,9 @@ def stop_server():
                 ssh.close()
 
     except Exception as e:
-        app.logger.error(f"Server start error: {str(e)}")
+        app.logger.error(f"Server stop error: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
 
-
-# @app.route("/api/server-stop", methods=["POST"])
-# def stop_server():
-#     try:
-#         data = request.get_json()
-
-#         if not data or "id" not in data:
-#             return jsonify({"error": "No id"}), 400
-
-#         server_id = data["id"]
-
-#         ssh = paramiko.SSHClient()
-#         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-#         ssh.connect(SSH_HOST, username=SSH_USER, key_filename="ssh_key")
-
-#         stdin, stdout, stderr = ssh.exec_command(f"cs2-server @prac{server_id} stop")
-#         output = stdout.read().decode()
-#         error = stderr.read().decode()
-
-#         clean_output = re.sub(r"\x1b\[[0-9;]*m", "", output)
-#         clean_output = re.sub(r"\*+\s*|\n\s*", " ", clean_output).strip()
-
-#         ssh.close()
-#         app.logger.info(output)
-#         app.logger.warning(error)
-#         return jsonify({"output": clean_output, "error": error})
-#     except Exception as e:
-#         app.logger.error(e)
-#         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/version", methods=["GET"])
