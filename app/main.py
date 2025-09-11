@@ -110,57 +110,7 @@ def stop_server():
     except Exception as e:
         app.logger.error(e)
         return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/status", methods=["POST"])
-async def check_status():
-    try:
-        data = request.get_json()
-        app.logger.info(f"Received data: {data}")
-
-        if not data or "serverIp" not in data or "serverPort" not in data:
-            app.logger.warning("Missing serverIp or serverPort in request")
-            return jsonify({"error": "No server ip or port"}), 400
-
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(SSH_HOST, username=SSH_USER, key_filename="ssh_key")
-
-        stdin, stdout, stderr = ssh.exec_command(
-            'grep -w "PatchVersion" msm.d/cs2/base/game/csgo/steam.inf'
-        )
-        output = stdout.read().decode()
-        ssh.close()
-
-        server_version = re.sub(r"\D", "", output)
-
-        server_ip = data["serverIp"]
-        server_port = data["serverPort"]
-        server_addres = (server_ip, server_port)
-
-        info = await a2s.ainfo(server_addres)
-
-        return (
-            jsonify(
-                {
-                    "status": "online",
-                    "players": str(info.player_count),
-                    "map": info.map_name,
-                    "port": info.port,
-                    "server_version": server_version,
-                }
-            ),
-            200,
-        )
-
-    except Exception as e:
-        return (
-            jsonify(
-                {"status": "offline", "error": str(e), "server_version": server_version}
-            ),
-            200,
-        )
-
+    
 
 @app.route("/api/version", methods=["GET"])
 def check_version():
