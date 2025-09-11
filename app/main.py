@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
+from datetime import datetime, timedelta
+import time
 import requests
 import paramiko
 import asyncio
@@ -64,22 +66,69 @@ def start_server():
             return jsonify({"error": "No id"}), 400
 
         server_id = data["id"]
+        ssh = None
+        try:
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect(SSH_HOST, username=SSH_USER, key_filename="ssh_key")
 
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(SSH_HOST, username=SSH_USER, key_filename="ssh_key")
+            stdin, stdout, stderr = ssh.exec_command(
+                f"cs2-server @prac{server_id} start"
+            )
+            output = stdout.read().decode()
+            error = stderr.read().decode()
 
-        stdin, stdout, stderr = ssh.exec_command(f"cs2-server @prac{server_id} start")
-        output = stdout.read().decode()
-        error = stderr.read().decode()
+            if error.strip():
+                return jsonify({"error": f"SSH command error: {error}"}), 500
 
-        ssh.close()
-        app.logger.info(output)
-        app.logger.warning(error)
-        return jsonify({"output": output, "error": error})
+            timeout_seconds = 60
+            check_interval = 1
+            start_time = datetime.now()
+            end_time = start_time + timedelta(seconds=timeout_seconds)
+
+            while datetime.now() < end_time:
+                try:
+                    response = requests.get(
+                        "https://dev.linfed.ru/api/servers", timeout=check_interval
+                    )
+                    servers = response.json()
+
+                    server = next(
+                        (s for s in servers if s.get("id") == server_id), None
+                    )
+                    if server and server.get("status") == "online":
+                        return (
+                            jsonify(
+                                {
+                                    "status": "success",
+                                    "data": server,
+                                }
+                            ),
+                            200,
+                        )
+
+                except requests.exceptions.RequestException:
+                    pass
+
+                time.sleep(check_interval)
+
+            return (
+                jsonify(
+                    {
+                        "status": "failed",
+                        "message": "Ошибка при запуске сервера",
+                    }
+                ),
+                200,
+            )
+
+        finally:
+            if ssh:
+                ssh.close()
+
     except Exception as e:
-        app.logger.error(e)
-        return jsonify({"error": str(e)}), 500
+        app.logger.error(f"Server start error: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
 
 
 @app.route("/api/server-stop", methods=["POST"])
@@ -91,26 +140,100 @@ def stop_server():
             return jsonify({"error": "No id"}), 400
 
         server_id = data["id"]
+        ssh = None
+        try:
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect(SSH_HOST, username=SSH_USER, key_filename="ssh_key")
 
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(SSH_HOST, username=SSH_USER, key_filename="ssh_key")
+            stdin, stdout, stderr = ssh.exec_command(
+                f"cs2-server @prac{server_id} stop"
+            )
+            output = stdout.read().decode()
+            error = stderr.read().decode()
 
-        stdin, stdout, stderr = ssh.exec_command(f"cs2-server @prac{server_id} stop")
-        output = stdout.read().decode()
-        error = stderr.read().decode()
+            if error.strip():
+                return jsonify({"error": f"SSH command error: {error}"}), 500
 
-        clean_output = re.sub(r"\x1b\[[0-9;]*m", "", output)
-        clean_output = re.sub(r"\*+\s*|\n\s*", " ", clean_output).strip()
+            timeout_seconds = 60
+            check_interval = 1
+            start_time = datetime.now()
+            end_time = start_time + timedelta(seconds=timeout_seconds)
 
-        ssh.close()
-        app.logger.info(output)
-        app.logger.warning(error)
-        return jsonify({"output": clean_output, "error": error})
+            while datetime.now() < end_time:
+                try:
+                    response = requests.get(
+                        "https://dev.linfed.ru/api/servers", timeout=check_interval
+                    )
+                    servers = response.json()
+
+                    server = next(
+                        (s for s in servers if s.get("id") == server_id), None
+                    )
+                    if server and server.get("status") == "offline":
+                        return (
+                            jsonify(
+                                {
+                                    "status": "success",
+                                    "data": server,
+                                }
+                            ),
+                            200,
+                        )
+
+                except requests.exceptions.RequestException:
+                    pass
+
+                time.sleep(check_interval)
+
+            return (
+                jsonify(
+                    {
+                        "status": "failed",
+                        "message": "Ошибка при остановке сервера",
+                    }
+                ),
+                200,
+            )
+
+        finally:
+            if ssh:
+                ssh.close()
+
     except Exception as e:
-        app.logger.error(e)
-        return jsonify({"error": str(e)}), 500
-    
+        app.logger.error(f"Server start error: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
+
+
+# @app.route("/api/server-stop", methods=["POST"])
+# def stop_server():
+#     try:
+#         data = request.get_json()
+
+#         if not data or "id" not in data:
+#             return jsonify({"error": "No id"}), 400
+
+#         server_id = data["id"]
+
+#         ssh = paramiko.SSHClient()
+#         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+#         ssh.connect(SSH_HOST, username=SSH_USER, key_filename="ssh_key")
+
+#         stdin, stdout, stderr = ssh.exec_command(f"cs2-server @prac{server_id} stop")
+#         output = stdout.read().decode()
+#         error = stderr.read().decode()
+
+#         clean_output = re.sub(r"\x1b\[[0-9;]*m", "", output)
+#         clean_output = re.sub(r"\*+\s*|\n\s*", " ", clean_output).strip()
+
+#         ssh.close()
+#         app.logger.info(output)
+#         app.logger.warning(error)
+#         return jsonify({"output": clean_output, "error": error})
+#     except Exception as e:
+#         app.logger.error(e)
+#         return jsonify({"error": str(e)}), 500
+
 
 @app.route("/api/version", methods=["GET"])
 def check_version():
