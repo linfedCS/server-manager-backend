@@ -243,7 +243,7 @@ def execute_commands():
 
     except Exception as e:
         app.logger.error(f"Server stop error: {str(e)}")
-        return jsonify(), 500
+        return jsonify({"error": "Internal server error"}), 500
 
 
 @app.route("/api/version", methods=["GET"])
