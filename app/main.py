@@ -7,7 +7,8 @@ import requests
 import paramiko
 import asyncio
 import os
-import re
+import aiofiles
+import json
 import a2s
 
 load_dotenv()
@@ -29,11 +30,9 @@ else:
 
 @app.route("/api/servers", methods=["GET"])
 async def list_servers():
-    servers = [
-        {"id": 1, "name": "Practice 1", "ip": "linfed.ru", "port": 28011},
-        {"id": 2, "name": "Practice 2", "ip": "linfed.ru", "port": 28012},
-        {"id": 3, "name": "Practice 3", "ip": "linfed.ru", "port": 28013},
-    ]
+    async with aiofiles.open("servers.json", "r") as f:
+        data = await f.read()
+        servers = json.loads(data)
 
     async def check_server(server):
         try:
@@ -55,6 +54,14 @@ async def list_servers():
 
     results = await asyncio.gather(*(check_server(server) for server in servers))
     return jsonify(results), 200
+
+
+@app.route("/api/maps", methods=["GET"])
+async def list_maps():
+    async with aiofiles.open("maps.json", "r") as f:
+        data = await f.read()
+        maps = json.loads(data)
+        return jsonify(maps), 200
 
 
 @app.route("/api/server-start", methods=["POST"])
@@ -201,38 +208,42 @@ def stop_server():
                 ssh.close()
 
     except Exception as e:
-        app.logger.error(f"Server start error: {str(e)}")
+        app.logger.error(f"Server stop error: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
 
 
-# @app.route("/api/server-stop", methods=["POST"])
-# def stop_server():
-#     try:
-#         data = request.get_json()
+@app.route("/api/commands", methods=["POST"])
+def execute_commands():
+    try:
+        data = request.get_json()
 
-#         if not data or "id" not in data:
-#             return jsonify({"error": "No id"}), 400
+        if not data or "id" not in data or "command" not in data:
+            return jsonify({"error": "No id or command"}), 400
 
-#         server_id = data["id"]
+        server_id = data["id"]
+        command = data["command"]
+        ssh = None
+        try:
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect(SSH_HOST, username=SSH_USER, key_filename="ssh_key")
 
-#         ssh = paramiko.SSHClient()
-#         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-#         ssh.connect(SSH_HOST, username=SSH_USER, key_filename="ssh_key")
+            stdin, stdout, stderr = ssh.exec_command(
+                f"cs2-server @prac{server_id} exec {command}"
+            )
+            output = stdout.read().decode()
+            error = stderr.read().decode()
 
-#         stdin, stdout, stderr = ssh.exec_command(f"cs2-server @prac{server_id} stop")
-#         output = stdout.read().decode()
-#         error = stderr.read().decode()
+            if error.strip():
+                return jsonify({"error": f"SSH command error: {error}"}), 500
+            return jsonify({"status": "success"})
+        finally:
+            if ssh:
+                ssh.close()
 
-#         clean_output = re.sub(r"\x1b\[[0-9;]*m", "", output)
-#         clean_output = re.sub(r"\*+\s*|\n\s*", " ", clean_output).strip()
-
-#         ssh.close()
-#         app.logger.info(output)
-#         app.logger.warning(error)
-#         return jsonify({"output": clean_output, "error": error})
-#     except Exception as e:
-#         app.logger.error(e)
-#         return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        app.logger.error(f"Server stop error: {str(e)}")
+        return jsonify(), 500
 
 
 @app.route("/api/version", methods=["GET"])

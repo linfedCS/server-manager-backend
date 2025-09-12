@@ -1,0 +1,30 @@
+[
+    {
+        "id": 0,
+        "name": "de_dust2"
+    },
+    {
+        "id": 1,
+        "name": "de_mirage"
+    },
+    {
+        "id": 2,
+        "name": "de_nuke"
+    },
+    {
+        "id": 3,
+        "name": "de_ancient"
+    },
+    {
+        "id": 4,
+        "name": "de_train"
+    },
+    {
+        "id": 5,
+        "name": "de_inferno"
+    },
+    {
+        "id": 6,
+        "name": "de_overpass"
+    }
+]
