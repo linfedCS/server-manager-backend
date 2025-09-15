@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
+from handlers.server_handler import process_data
 import time
 import requests
 import paramiko
@@ -18,7 +19,7 @@ app.debug = True
 CORS(app)
 
 SSH_HOST = os.getenv("HOST_IP", "linfed.ru")
-SSH_USER = "cs"
+SSH_USER = os.getenv("SSH_USER")
 SSH_PRIVATE_KEY = os.getenv("SSH_KEY")
 if SSH_PRIVATE_KEY is not None:
     key = SSH_PRIVATE_KEY.encode().decode("unicode_escape")
@@ -212,37 +213,23 @@ def stop_server():
         return jsonify({"error": "Internal server error"}), 500
 
 
-@app.route("/api/commands", methods=["POST"])
+@app.route("/api/server/settings", methods=["POST"])
 def execute_commands():
     try:
         data = request.get_json()
 
-        if not data or "id" not in data or "command" not in data:
-            return jsonify({"error": "No id or command"}), 400
+        if not data or "id" not in data:
+            return jsonify({"error": "No id"}), 400
 
-        server_id = data["id"]
-        command = data["command"]
-        ssh = None
-        try:
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(SSH_HOST, username=SSH_USER, key_filename="ssh_key")
+        results = process_data(data)
 
-            stdin, stdout, stderr = ssh.exec_command(
-                f"cs2-server @prac{server_id} exec {command}"
-            )
-            output = stdout.read().decode()
-            error = stderr.read().decode()
+        if not results:
+            return jsonify({"error": "No valid data"}), 400
 
-            if error.strip():
-                return jsonify({"error": f"SSH command error: {error}"}), 500
-            return jsonify({"status": "success"})
-        finally:
-            if ssh:
-                ssh.close()
+        return jsonify(results)
 
     except Exception as e:
-        app.logger.error(f"Server stop error: {str(e)}")
+        app.logger.error(f"Error execute commands: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
 
 
