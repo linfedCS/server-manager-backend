@@ -23,7 +23,7 @@ def handler_map(data):
         server_id = data["id"]
         map_id = data["map_id"]
 
-        with open("../maps.json", "r") as file:
+        with open("maps.json", "r") as file:
             maps_data = json.load(file)
 
         map_dict = {item["id"]: item["name"] for item in maps_data}

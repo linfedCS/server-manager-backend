@@ -32,20 +32,25 @@ else:
 @app.route("/api/servers", methods=["GET"])
 async def list_servers():
     async with aiofiles.open("servers.json", "r") as f:
-        data = await f.read()
-        servers = json.loads(data)
+        servers = json.loads(await f.read())
+
+    async with aiofiles.open("maps.json", "r") as f:
+        maps = json.loads(await f.read())
+
+    map_name_to_id = {map_item["name"]: map_item["id"] for map_item in maps}
 
     async def check_server(server):
         try:
             address = (server["ip"], server["port"])
             info = await a2s.ainfo(address)
+            map_id = map_name_to_id.get(info.map_name, info.map_name)
             return {
                 "status": "online",
                 "id": server["id"],
                 "name": server["name"],
                 "ip": server["ip"],
                 "port": server["port"],
-                "map": info.map_name,
+                "map_id": map_id,
                 "players_current": info.player_count,
                 "players_max": info.max_players,
             }
@@ -231,29 +236,6 @@ def execute_commands():
     except Exception as e:
         app.logger.error(f"Error execute commands: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
-
-
-@app.route("/api/version", methods=["GET"])
-def check_version():
-    try:
-        key = os.getenv("STEAM_WEB_API_KEY")
-        params = {"key": key}
-        response = requests.get(
-            "https://api.steampowered.com/ICSGOServers_730/GetGameServersStatus/v1/",
-            params=params,
-        )
-        if response.ok:
-            data = response.json()
-            return jsonify(str(data["result"]["app"]["version"])), 200
-    except Exception as e:
-        return (
-            jsonify(
-                {
-                    "error": "Couldn't get version",
-                }
-            ),
-            523,
-        )
 
 
 if __name__ == "__main__":
