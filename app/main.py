@@ -19,7 +19,7 @@ app = Flask(__name__)
 app.debug = True
 CORS(app)
 
-API_URL = "/static/openapi.yaml"
+API_URL = "https://dev.linfed.ru/static/openapi.json"
 SWAGGER_URL = "/api/docs"
 
 swagger = get_swaggerui_blueprint(
@@ -39,6 +39,10 @@ if SSH_PRIVATE_KEY is not None:
 else:
     print("No ssh_key")
 
+
+@app.route('/static/openapi.json')
+def serve_static_file():
+    return send_from_directory('static', 'openapi.json')
 
 @app.route("/api/servers", methods=["GET"])
 async def list_servers():
