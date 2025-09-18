@@ -1,0 +1,300 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "CS2 Server Management API",
+    "version": "1.0.0",
+    "description": "API для управления серверами Counter-Strike 2"
+  },
+  "servers": [
+    {
+      "url": "https://dev.linfed.ru/"
+    }
+  ],
+  "paths": {
+    "/api/servers": {
+      "get": {
+        "summary": "Получить список серверов",
+        "description": "Возвращает статус и информацию о всех серверах",
+        "responses": {
+          "200": {
+            "description": "Успешный ответ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ServerStatus"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Внутренняя ошибка сервера"
+          }
+        }
+      }
+    },
+    "/api/maps": {
+      "get": {
+        "summary": "Получить список карт",
+        "description": "Возвращает информацию о доступных картах",
+        "responses": {
+          "200": {
+            "description": "Успешный ответ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GameMap"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/server-start": {
+      "post": {
+        "summary": "Запустить сервер",
+        "description": "Запускает указанный сервер и возвращает его статус",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServerActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Результат операции запуска",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/SuccessfulStartResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/FailedStartResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Не указан ID сервера"
+          },
+          "500": {
+            "description": "Внутренняя ошибка сервера"
+          }
+        }
+      }
+    },
+    "/api/server-stop": {
+      "post": {
+        "summary": "Остановить сервер",
+        "description": "Останавливает указанный сервер если на нем нет игроков",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServerActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Результат операции остановки",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/SuccessfulStopResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/FailedStopResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Не указан ID сервера"
+          },
+          "404": {
+            "description": "Сервер не найден"
+          },
+          "500": {
+            "description": "Внутренняя ошибка сервера"
+          }
+        }
+      }
+    },
+    "/api/server/settings": {
+      "post": {
+        "summary": "Выполнить команды настройки сервера",
+        "description": "Выполняет команды конфигурации на указанном сервере",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServerSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Результат выполнения команд"
+          },
+          "400": {
+            "description": "Неверные параметры запроса"
+          },
+          "500": {
+            "description": "Внутренняя ошибка сервера"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ServerStatus": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "online",
+              "offline"
+            ]
+          },
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ip": {
+            "type": "string",
+            "format": "ipv4"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "map_id": {
+            "type": "integer"
+          },
+          "players_current": {
+            "type": "integer"
+          },
+          "players_max": {
+            "type": "integer"
+          }
+        }
+      },
+      "GameMap": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "ServerActionRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "ID сервера"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "SuccessfulStartResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ServerStatus"
+          }
+        }
+      },
+      "FailedStartResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "failed"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "SuccessfulStopResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ServerStatus"
+          }
+        }
+      },
+      "FailedStopResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "failed"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ServerStatus"
+          }
+        }
+      },
+      "ServerSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "ID сервера"
+          },
+          "map_id": {
+            "type": "integer",
+            "description": "ID карты"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    }
+  }
+}

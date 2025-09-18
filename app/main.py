@@ -19,17 +19,14 @@ app = Flask(__name__)
 app.debug = True
 CORS(app)
 
-API_URL = "/static/openapi.yaml"
+API_URL = "/static/openapi.json"
 SWAGGER_URL = "/api/docs"
 
 swagger = get_swaggerui_blueprint(
     SWAGGER_URL,
     API_URL,
     config={
-        "app_name": "Linfed | Server manager API",
-        "spec": {
-            "openapi": "3.0.4"
-        }
+        "app_name": "Linfed | Server manager API"
     },
 )
 app.register_blueprint(swagger)
