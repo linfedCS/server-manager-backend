@@ -1,5 +1,4 @@
-swagger: "2.0"
-openapi: 3.1.0
+openapi: "3.0.4"
 info:
   title: CS2 Server Management API
   version: 1.0.0
@@ -48,13 +47,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ServerActionRequest"
-      parameters:
-        - name: id
-          in:
-          description: ID сервера
-          required: true
-          schema:
-            type: integer
       responses:
         "200":
           description: Результат операции запуска
@@ -79,13 +71,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ServerActionRequest"
-      parameters:
-        - name: id
-          in:
-          description: ID сервера
-          required: true
-          schema:
-            type: integer
       responses:
         "200":
           description: Результат операции остановки
@@ -112,19 +97,6 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ServerSettingsRequest"
-      parameters:
-        - name: id
-          in:
-          description: ID сервера
-          required: true
-          schema:
-            type: integer
-        - name: map_id
-          in:
-          description: ID карты
-          required: false
-          schema:
-            type: integer
       responses:
         "200":
           description: Результат выполнения команд
