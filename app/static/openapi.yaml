@@ -1,10 +1,10 @@
-openapi: "3.0.4"
+openapi: 3.0.1
 info:
   title: CS2 Server Management API
   version: 1.0.0
   description: API для управления серверами Counter-Strike 2
 servers:
-  - url: https://dev.linfed.ru/
+  - url: https://dev.linfed.ru
 
 paths:
   /api/servers:

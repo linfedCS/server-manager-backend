@@ -19,7 +19,7 @@ app = Flask(__name__)
 app.debug = True
 CORS(app)
 
-API_URL = "/static/openapi.json"
+API_URL = "/static/openapi.yaml"
 SWAGGER_URL = "/api/docs"
 
 swagger = get_swaggerui_blueprint(
