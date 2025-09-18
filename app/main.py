@@ -51,7 +51,7 @@ async def list_servers():
                 "ip": server["ip"],
                 "port": server["port"],
                 "map_id": map_id,
-                "players_current": info.player_count,
+                "players_current": int(info.player_count),
                 "players_max": info.max_players,
             }
 
@@ -129,7 +129,7 @@ def start_server():
                 jsonify(
                     {
                         "status": "failed",
-                        "message": "Ошибка при запуске сервера",
+                        "message": "Error when starting the server",
                     }
                 ),
                 200,
@@ -153,6 +153,25 @@ def stop_server():
             return jsonify({"error": "No id"}), 400
 
         server_id = data["id"]
+        try:
+            response = requests.get("https://dev.linfed.ru/api/servers", timeout=10)
+            servers = response.json()
+            server = next((s for s in servers if s.get("id") == server_id), None)
+
+            if not server:
+                return jsonify({"error": "Server not found"}), 404
+
+            # Проверяем, есть ли игроки на сервере
+            if server.get("players_current", 0) >= 1:
+                return jsonify({
+                    "status": "failed",
+                    "message": "You can't stop the server while there are players on it",
+                    "data": server
+                }), 200
+
+        except requests.exceptions.RequestException as e:
+            return jsonify({"error": "Could not check server status"}), 500
+
         ssh = None
         try:
             ssh = paramiko.SSHClient()
@@ -183,6 +202,7 @@ def stop_server():
                     server = next(
                         (s for s in servers if s.get("id") == server_id), None
                     )
+
                     if server and server.get("status") == "offline":
                         return (
                             jsonify(
@@ -203,7 +223,7 @@ def stop_server():
                 jsonify(
                     {
                         "status": "failed",
-                        "message": "Ошибка при остановке сервера",
+                        "message": "Error when stopping the server",
                     }
                 ),
                 200,
