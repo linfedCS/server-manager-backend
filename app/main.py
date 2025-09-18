@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_swagger_ui import get_swaggerui_blueprint
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -19,15 +19,13 @@ app = Flask(__name__)
 app.debug = True
 CORS(app)
 
-API_URL = "/static/openapi.yaml"
+API_URL = "static/openapi.yaml"
 SWAGGER_URL = "/api/docs"
 
 swagger = get_swaggerui_blueprint(
     SWAGGER_URL,
     API_URL,
-    config={
-        "app_name": "Linfed | Server manager API"
-    },
+    config={"app_name": "Linfed | Server manager API"},
 )
 app.register_blueprint(swagger)
 
@@ -176,11 +174,16 @@ def stop_server():
 
             # Проверяем, есть ли игроки на сервере
             if server.get("players_current", 0) >= 1:
-                return jsonify({
-                    "status": "failed",
-                    "message": "You can't stop the server while there are players on it",
-                    "data": server
-                }), 200
+                return (
+                    jsonify(
+                        {
+                            "status": "failed",
+                            "message": "You can't stop the server while there are players on it",
+                            "data": server,
+                        }
+                    ),
+                    200,
+                )
 
         except requests.exceptions.RequestException as e:
             return jsonify({"error": "Could not check server status"}), 500
