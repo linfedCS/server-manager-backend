@@ -27,7 +27,7 @@ swagger = get_swaggerui_blueprint(
     API_URL,
     config={"app_name": "Linfed | Server manager API", "validatorUrl": "none"},
 )
-app.register_blueprint(swagger)
+app.register_blueprint(swagger, url_prefix=SWAGGER_URL )
 
 SSH_HOST = os.getenv("HOST_IP", "linfed.ru")
 SSH_USER = os.getenv("SSH_USER")
