@@ -26,7 +26,10 @@ swagger = get_swaggerui_blueprint(
     SWAGGER_URL,
     API_URL,
     config={
-        "app_name": "Linfed | Server manager API"
+        "app_name": "Linfed | Server manager API",
+        "spec": {
+            "openapi": "3.0.4"
+        }
     },
 )
 app.register_blueprint(swagger)
