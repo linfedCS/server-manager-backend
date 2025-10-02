@@ -1,282 +1,491 @@
-from flask import Flask, request, jsonify, send_from_directory
-from flask_swagger_ui import get_swaggerui_blueprint
-from flask_cors import CORS
+from datetime import datetime
+from fastapi import FastAPI
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
-from handlers.server_handler import process_data
-import time
-import requests
-import paramiko
+from db.database import get_db_connection
+from db.lifespan import lifespan
+from handlers.handler import dispatcher
+from models.models import *
 import asyncio
+import telnetlib3
+import asyncio
+import uvicorn
 import os
-import aiofiles
-import json
 import a2s
+import aiohttp
+import asyncssh
+
 
 load_dotenv()
 
-app = Flask(__name__)
-app.debug = True
-CORS(app)
+HOST_URL = os.getenv("HOST_URL")
 
-API_URL = "https://dev.linfed.ru/api/static/openapi.json"
-SWAGGER_URL = "/api/docs"
+# SSH settings for ts3 server
+TS3_SSH_HOST = os.getenv("TS3_SSH_HOST")
+TS3_SSH_PORT = os.getenv("TS3_SSH_PORT")
+TS3_SSH_USER = os.getenv("TS3_SSH_USER")
+TS3_SSH_PASS = os.getenv("TS3_SSH_PASS")
 
-swagger = get_swaggerui_blueprint(
-    SWAGGER_URL,
-    API_URL,
-    config={"app_name": "Linfed | Server manager API", "validatorUrl": "none"},
-)
-app.register_blueprint(swagger, url_prefix=SWAGGER_URL )
-
-SSH_HOST = os.getenv("HOST_IP", "linfed.ru")
+# SSH settings for cs2 servers
+SSH_HOST = os.getenv("HOST_IP")
 SSH_USER = os.getenv("SSH_USER")
 SSH_PRIVATE_KEY = os.getenv("SSH_KEY")
 if SSH_PRIVATE_KEY is not None:
     key = SSH_PRIVATE_KEY.encode().decode("unicode_escape")
     with open("ssh_key", "w") as file:
         file.write(key)
-else:
-    print("No ssh_key")
+
+app = FastAPI(
+    title="Linfed | Server manager API", lifespan=lifespan, docs_url="/api/docs", openapi_tags=[
+        {"name": "CS2 Handlers", "description": ""},
+        {"name": "TS3 Handlers", "description": ""}
+    ]
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
-@app.route('/api/static/openapi.json')
-def serve_static_file():
-    return send_from_directory('static', 'openapi.json')
-
-@app.route("/api/servers", methods=["GET"])
+@app.get(
+    "/api/servers",
+    response_model=ServerResponse,
+    responses={
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
+    tags=["CS2 Handlers"]
+)
 async def list_servers():
-    async with aiofiles.open("servers.json", "r") as f:
-        servers = json.loads(await f.read())
-
-    async with aiofiles.open("maps.json", "r") as f:
-        maps = json.loads(await f.read())
-
-    map_name_to_id = {map_item["name"]: map_item["id"] for map_item in maps}
-
-    async def check_server(server):
-        try:
-            address = (server["ip"], server["port"])
-            info = await a2s.ainfo(address)
-            map_id = map_name_to_id.get(info.map_name, info.map_name)
-            return {
-                "status": "online",
-                "id": server["id"],
-                "name": server["name"],
-                "ip": server["ip"],
-                "port": server["port"],
-                "map_id": map_id,
-                "players_current": int(info.player_count),
-                "players_max": info.max_players,
-            }
-
-        except Exception as e:
-            return {"status": "offline", "id": server["id"], "name": server["name"]}
-
-    results = await asyncio.gather(*(check_server(server) for server in servers))
-    return jsonify(results), 200
-
-
-@app.route("/api/maps", methods=["GET"])
-async def list_maps():
-    async with aiofiles.open("maps.json", "r") as f:
-        data = await f.read()
-        maps = json.loads(data)
-        return jsonify(maps), 200
-
-
-@app.route("/api/server-start", methods=["POST"])
-def start_server():
     try:
-        data = request.get_json()
 
-        if not data or "id" not in data:
-            return jsonify({"error": "No id"}), 400
+        def fetch_servers_and_maps():
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT * FROM servers")
+                    servers = cur.fetchall()
+                    servers_columns = [desc[0] for desc in cur.description]
+                    server_list = [dict(zip(servers_columns, row)) for row in servers]
 
-        server_id = data["id"]
-        ssh = None
-        try:
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(SSH_HOST, username=SSH_USER, key_filename="ssh_key")
+                    cur.execute("SELECT name, map_id FROM maps")
+                    maps = cur.fetchall()
+                    maps_columns = [desc[0] for desc in cur.description]
+                    maps_list = [dict(zip(maps_columns, row)) for row in maps]
 
-            stdin, stdout, stderr = ssh.exec_command(
-                f"cs2-server @prac{server_id} start"
-            )
-            output = stdout.read().decode()
-            error = stderr.read().decode()
+                    return server_list, maps_list
 
-            if error.strip():
-                return jsonify({"error": f"SSH command error: {error}"}), 500
+        servers, maps = await asyncio.to_thread(fetch_servers_and_maps)
 
-            timeout_seconds = 60
-            check_interval = 1
-            start_time = datetime.now()
-            end_time = start_time + timedelta(seconds=timeout_seconds)
+        map_name_to_id = {map_item["name"]: map_item["map_id"] for map_item in maps}
 
-            while datetime.now() < end_time:
-                try:
-                    response = requests.get(
-                        "https://dev.linfed.ru/api/servers", timeout=check_interval
-                    )
-                    servers = response.json()
+        async def check_server(server):
+            try:
+                address = (server["ip"], server["port"])
+                info = await a2s.ainfo(address)
+                map_id = map_name_to_id.get(info.map_name)
 
-                    server = next(
-                        (s for s in servers if s.get("id") == server_id), None
-                    )
-                    if server and server.get("status") == "online":
-                        return (
-                            jsonify(
-                                {
-                                    "status": "success",
-                                    "data": server,
-                                }
-                            ),
-                            200,
-                        )
-
-                except requests.exceptions.RequestException:
-                    pass
-
-                time.sleep(check_interval)
-
-            return (
-                jsonify(
-                    {
-                        "status": "failed",
-                        "message": "Error when starting the server",
-                    }
-                ),
-                200,
-            )
-
-        finally:
-            if ssh:
-                ssh.close()
-
-    except Exception as e:
-        app.logger.error(f"Server start error: {str(e)}")
-        return jsonify({"error": "Internal server error"}), 500
-
-
-@app.route("/api/server-stop", methods=["POST"])
-def stop_server():
-    try:
-        data = request.get_json()
-
-        if not data or "id" not in data:
-            return jsonify({"error": "No id"}), 400
-
-        server_id = data["id"]
-        try:
-            response = requests.get("https://dev.linfed.ru/api/servers", timeout=10)
-            servers = response.json()
-            server = next((s for s in servers if s.get("id") == server_id), None)
-
-            if not server:
-                return jsonify({"error": "Server not found"}), 404
-
-            # Проверяем, есть ли игроки на сервере
-            if server.get("players_current", 0) >= 1:
-                return (
-                    jsonify(
-                        {
-                            "status": "failed",
-                            "message": "You can't stop the server while there are players on it",
-                            "data": server,
-                        }
-                    ),
-                    200,
+                return ServerOnline(
+                    status="online",
+                    server_id=server["server_id"],
+                    name=server["name"],
+                    ip=server["ip"],
+                    port=server["port"],
+                    map_id=map_id,
+                    players_current=int(info.player_count),
+                    players_max=info.max_players,
                 )
 
-        except requests.exceptions.RequestException as e:
-            return jsonify({"error": "Could not check server status"}), 500
+            except Exception as e:
+                return ServerOffline(
+                    status="offline", server_id=server["server_id"], name=server["name"]
+                )
 
-        ssh = None
-        try:
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(SSH_HOST, username=SSH_USER, key_filename="ssh_key")
+        results = await asyncio.gather(*(check_server(server) for server in servers))
+        return results
 
-            stdin, stdout, stderr = ssh.exec_command(
-                f"cs2-server @prac{server_id} stop"
+    except Exception:
+        error_response = jsonable_encoder(
+            ErrorResponse(status="error", msg="Internal server error")
+        )
+        return JSONResponse(status_code=500, content=error_response)
+
+
+@app.get(
+    "/api/maps",
+    response_model=List[MapItem],
+    responses={
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
+    tags=["CS2 Handlers"]
+)
+def list_maps():
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT name, map_id FROM maps")
+                maps = cur.fetchall()
+                columns = [desc[0] for desc in cur.description]
+                maps_list = [dict(zip(columns, row)) for row in maps]
+
+                map_items = [MapItem(**map_dict) for map_dict in maps_list]
+                return map_items
+
+    except Exception:
+        error_response = jsonable_encoder(
+            ErrorResponse(status="error", msg="Internal server error")
+        )
+        return JSONResponse(status_code=500, content=error_response)
+
+
+@app.post(
+    "/api/server-start",
+    response_model=ServerStartResponse,
+    responses={
+        400: {"model": ErrorResponse, "description": "Uncorrected Request"},
+        408: {"model": ErrorResponse, "description": "Request Timeout"},
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
+    tags=["CS2 Handlers"]
+)
+async def start_server(request: ServerRequest):
+    server_id = request.server_id
+
+    if not server_id:
+        error_response = jsonable_encoder(
+            ErrorResponse(
+                status="failed", msg="Validation Error - check server_id params"
             )
-            output = stdout.read().decode()
-            error = stderr.read().decode()
+        )
+        return JSONResponse(status_code=422, content=error_response)
 
-            if error.strip():
-                return jsonify({"error": f"SSH command error: {error}"}), 500
+    try:
+        async with asyncssh.connect(
+            SSH_HOST, username=SSH_USER, client_keys=["ssh_key"], known_hosts=None
+        ) as ssh:
+            result = await ssh.run(f"cs2-server @prac{server_id} start")
+
+            if result.stderr:
+                error_response = jsonable_encoder(
+                    ErrorResponse(status="error", msg="SSH Error")
+                )
+                return JSONResponse(status_code=500, content=error_response)
 
             timeout_seconds = 60
             check_interval = 1
             start_time = datetime.now()
-            end_time = start_time + timedelta(seconds=timeout_seconds)
 
-            while datetime.now() < end_time:
-                try:
-                    response = requests.get(
-                        "https://dev.linfed.ru/api/servers", timeout=check_interval
-                    )
-                    servers = response.json()
+            async with aiohttp.ClientSession() as session:
+                while (datetime.now() - start_time).seconds < timeout_seconds:
+                    try:
+                        async with session.get(
+                            f"{HOST_URL}/api/servers", timeout=5
+                        ) as response:
+                            servers = await response.json()
+                            server = next(
+                                (s for s in servers if s.get("server_id") == server_id),
+                                None,
+                            )
+                            if not server:
+                                error_response = jsonable_encoder(
+                                    ErrorResponse(
+                                        status="error", msg="Server not found"
+                                    )
+                                )
+                                return JSONResponse(
+                                    status_code=400, content=error_response
+                                )
 
-                    server = next(
-                        (s for s in servers if s.get("id") == server_id), None
-                    )
+                            if server.get("status") == "online":
+                                server_data = ServerOnline(**server)
+                                return ServerStartResponse(
+                                    status="success", data=server_data
+                                )
 
-                    if server and server.get("status") == "offline":
-                        return (
-                            jsonify(
-                                {
-                                    "status": "success",
-                                    "data": server,
-                                }
-                            ),
-                            200,
-                        )
+                            error_response = jsonable_encoder(
+                                ErrorResponse(
+                                    status="failed", msg="Couldn't start the server"
+                                )
+                            )
+                            return JSONResponse(status_code=500, content=error_response)
 
-                except requests.exceptions.RequestException:
-                    pass
+                    except (aiohttp.ClientError, asyncio.TimeoutError):
+                        await asyncio.sleep(check_interval)
+                        continue
 
-                time.sleep(check_interval)
+                    await asyncio.sleep(check_interval)
 
-            return (
-                jsonify(
-                    {
-                        "status": "failed",
-                        "message": "Error when stopping the server",
-                    }
-                ),
-                200,
+                error_response = jsonable_encoder(
+                    ErrorResponse(status="failed", msg="Request Timeout")
+                )
+                return JSONResponse(status_code=408, content=error_response)
+
+    except asyncssh.Error as e:
+        error_response = jsonable_encoder(
+            ErrorResponse(status="error", msg="SSH connection error")
+        )
+        return JSONResponse(status_code=500, content=error_response)
+
+
+@app.post(
+    "/api/server-stop",
+    response_model=Union[ServerStopResponse, ErrorResponse],
+    responses={
+        400: {"model": ErrorResponse, "description": "Uncorrected Request"},
+        408: {"model": ErrorResponse, "description": "Request Timeout"},
+        409: {"model": ErrorResponse, "description": "Conflict"},
+        500: {"model": ErrorResponse, "description": "Internal server Error"},
+    },
+    tags=["CS2 Handlers"]
+)
+async def stop_server(request: ServerRequest):
+    server_id = request.server_id
+
+    if not server_id:
+        error_response = jsonable_encoder(
+            ErrorResponse(
+                status="error", msg="Validation Error - check server_id params"
             )
+        )
+        return JSONResponse(status_code=422, content=error_response)
 
-        finally:
-            if ssh:
-                ssh.close()
-
-    except Exception as e:
-        app.logger.error(f"Server stop error: {str(e)}")
-        return jsonify({"error": "Internal server error"}), 500
-
-
-@app.route("/api/server/settings", methods=["POST"])
-def execute_commands():
     try:
-        data = request.get_json()
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{HOST_URL}/api/servers", timeout=5) as response:
+                servers = await response.json()
+                server = next(
+                    (s for s in servers if s.get("server_id") == server_id), None
+                )
+                if not server:
+                    error_response = jsonable_encoder(
+                        ErrorResponse(status="error", msg="Server not found")
+                    )
+                    return JSONResponse(
+                        status_code=400,
+                        content=error_response,
+                    )
+                if server.get("players_current") >= 1:
+                    error_response = jsonable_encoder(
+                        ErrorResponse(
+                            status="failed",
+                            msg="You can't stop the server while there are players on it",
+                        )
+                    )
+                    return JSONResponse(status_code=409, content=error_response)
 
-        if not data or "id" not in data:
-            return jsonify({"error": "No id"}), 400
+    except aiohttp.ClientError:
+        error_response = jsonable_encoder(
+            ErrorResponse(status="error", msg="Couldn't check server status")
+        )
+        return JSONResponse(status_code=500, content=error_response)
 
-        results = process_data(data)
+    try:
+        async with asyncssh.connect(
+            SSH_HOST, username=SSH_USER, client_keys=["ssh_key"], known_hosts=None
+        ) as ssh:
+            result = await ssh.run(f"cs2-server @prac{server_id} stop")
 
-        if not results:
-            return jsonify({"error": "No valid data"}), 400
+            if result.stderr:
+                error_response = jsonable_encoder(
+                    ErrorResponse(status="error", msg="SSH Error")
+                )
+                return JSONResponse(status_code=500, content=error_response)
 
-        return jsonify(results)
+            timeout_seconds = 60
+            check_interval = 1
+            start_time = datetime.now()
+
+            async with aiohttp.ClientSession() as session:
+                while (datetime.now() - start_time).seconds < timeout_seconds:
+                    try:
+                        async with session.get(
+                            f"{HOST_URL}/api/servers", timeout=5
+                        ) as response:
+                            servers = await response.json()
+
+                            if server := next(
+                                (s for s in servers if s.get("server_id") == server_id),
+                                None,
+                            ):
+                                if not server:
+                                    error_response = jsonable_encoder(
+                                        ErrorResponse(
+                                            status="error", msg="Server not found"
+                                        )
+                                    )
+                                    return JSONResponse(
+                                        status_code=400,
+                                        content=error_response,
+                                    )
+
+                                if server.get("status") == "offline":
+                                    server_data = ServerOffline(**server)
+                                    return ServerStopResponse(
+                                        status="success", data=server_data
+                                    )
+
+                                error_response = jsonable_encoder(
+                                    ErrorResponse(
+                                        status="failed", msg="Couldn't stop the server"
+                                    )
+                                )
+                                return JSONResponse(
+                                    status_code=500, content=error_response
+                                )
+
+                    except (aiohttp.ClientError, asyncio.TimeoutError):
+                        await asyncio.sleep(check_interval)
+                        continue
+
+                    await asyncio.sleep(check_interval)
+
+                error_response = jsonable_encoder(
+                    ErrorResponse(status="failed", msg="Request Timeout")
+                )
+                return JSONResponse(status_code=408, content=error_response)
+
+    except asyncssh.Error as e:
+        error_response = jsonable_encoder(
+            ErrorResponse(status="error", msg="SSH connection error")
+        )
+        return JSONResponse(status_code=500, content=error_response)
+
+
+@app.post(
+    "/api/server/settings",
+    response_model=ServerSettingsResponse,
+    responses={
+        400: {"model": ErrorResponse, "description": "Uncorrected request"},
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
+    tags=["CS2 Handlers"]
+)
+async def execute_commands(request: ServerSettingsRequest):
+    try:
+        data = request.model_dump(exclude_unset=True)
+
+        fields_provided = set(data.keys()) - {"server_id"}
+        if not fields_provided:
+            error_response = jsonable_encoder(
+                ErrorResponse(status="failed", msg="No one settings have been sent")
+            )
+            return JSONResponse(status_code=400, content=error_response)
+
+        result = await dispatcher.handle(data)
+
+        if not result:
+            error_response = jsonable_encoder(
+                ErrorResponse(status="failed", msg="Check settings params")
+            )
+            return JSONResponse(status_code=400, content=error_response)
+
+        error_field = None
+        error_data = None
+
+        for field_name, field_value in result.items():
+            if isinstance(field_value, dict) and field_value.get("status") in [
+                "error",
+                "failed",
+            ]:
+                error_field = field_name
+                error_data = field_value
+                break
+
+        if error_field:
+            status_code = 500 if error_data.get("status") == "error" else 400
+            return JSONResponse(status_code=status_code, content=error_data)
+
+        settings_response = SettingsResponse(**result)
+        response = ServerSettingsResponse(data=settings_response)
+
+        return response
 
     except Exception as e:
-        app.logger.error(f"Error execute commands: {str(e)}")
-        return jsonify({"error": "Internal server error"}), 500
+        error_response = jsonable_encoder(
+            ErrorResponse(status="error", msg=f"Internal server error {e}")
+        )
+        return JSONResponse(status_code=500, content=error_response)
+
+
+@app.post(
+    "/api/newchannel",
+    response_model=Ts3NewChannelResponse,
+    responses={
+        400: {"model": ErrorResponse, "description": "Uncorrected request"},
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
+    tags=["TS3 Handlers"]
+)
+async def ts3_new_channel(request: Ts3NewChannelRequest):
+    data = request.model_dump(exclude_unset=True)
+
+    try:
+        # Подключаемся напрямую к Query порту TeamSpeak
+        reader, writer = await telnetlib3.open_connection(
+            TS3_SSH_HOST,  # IP вашего TS3 сервера
+            TS3_SSH_PORT,  # Стандартный Query порт
+        )
+
+        # Читаем приветственное сообщение
+        welcome = await asyncio.wait_for(reader.read(1024), timeout=5.0)
+        print(f"Welcome: {welcome}")
+
+        # Аутентификация
+        writer.write(f"login {TS3_SSH_USER} {TS3_SSH_PASS}\n")
+        await writer.drain()
+        auth_response = await asyncio.wait_for(reader.read(1024), timeout=5.0)
+        print(f"Auth: {auth_response}")
+
+        # Выбираем виртуальный сервер
+        writer.write("use 1\n")
+        await writer.drain()
+        use_response = await asyncio.wait_for(reader.read(1024), timeout=5.0)
+        print(f"Use: {use_response}")
+
+        # Создаем канал
+        channel_command = f'channelcreate channel_name="{data["channel_name"]}" '
+
+        if data.get("channel_pass"):
+            channel_command += f'channel_password="{data["channel_pass"]}" '
+
+        channel_command += f"channel_maxclients=-1 " f"channel_delete_delay=600\n"
+
+        writer.write(channel_command)
+        await writer.drain()
+        create_response = await asyncio.wait_for(reader.read(1024), timeout=5.0)
+        print(f"Create: {create_response}")
+
+        # Закрываем соединение
+        writer.write("quit\n")
+        await writer.drain()
+        writer.close()
+
+        # Проверяем результат
+        if "error id=0" not in create_response.lower():
+            error_response = jsonable_encoder(
+                ErrorResponse(status="error", msg=f"TeamSpeak error: {create_response}")
+            )
+            return JSONResponse(status_code=400, content=error_response)
+
+    except Exception as e:
+        error_response = jsonable_encoder(
+            ErrorResponse(status="error", msg=f"Connection error: {str(e)}")
+        )
+        return JSONResponse(status_code=500, content=error_response)
+
+    success_response = jsonable_encoder(
+        Ts3NewChannelResponse(status="success", msg="Channel created successfully")
+    )
+    return JSONResponse(status_code=200, content=success_response)
 
 
 if __name__ == "__main__":
-    app.run(host="localhost", port=5000)
+    uvicorn.run(
+        "main:app",
+        host="localhost",
+        port=5000,
+        # reload=True,
+        workers=6,
+    )
