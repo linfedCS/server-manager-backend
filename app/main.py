@@ -39,10 +39,17 @@ if SSH_PRIVATE_KEY is not None:
         file.write(key)
 
 app = FastAPI(
-    title="Linfed | Server manager API", lifespan=lifespan, docs_url="/api/docs", openapi_tags=[
+    title="Linfed | Server manager API",
+    lifespan=lifespan,
+    docs_url="/api/docs",
+    openapi_url="/api/openapi.json",
+    servers=[
+        {"url": f"{HOST_URL}"},
+    ],
+    openapi_tags=[
         {"name": "CS2 Handlers", "description": ""},
-        {"name": "TS3 Handlers", "description": ""}
-    ]
+        {"name": "TS3 Handlers", "description": ""},
+    ],
 )
 app.add_middleware(
     CORSMiddleware,
@@ -58,7 +65,7 @@ app.add_middleware(
     responses={
         500: {"model": ErrorResponse, "description": "Internal server error"},
     },
-    tags=["CS2 Handlers"]
+    tags=["CS2 Handlers"],
 )
 async def list_servers():
     try:
@@ -120,7 +127,7 @@ async def list_servers():
     responses={
         500: {"model": ErrorResponse, "description": "Internal server error"},
     },
-    tags=["CS2 Handlers"]
+    tags=["CS2 Handlers"],
 )
 def list_maps():
     try:
@@ -149,7 +156,7 @@ def list_maps():
         408: {"model": ErrorResponse, "description": "Request Timeout"},
         500: {"model": ErrorResponse, "description": "Internal server error"},
     },
-    tags=["CS2 Handlers"]
+    tags=["CS2 Handlers"],
 )
 async def start_server(request: ServerRequest):
     server_id = request.server_id
@@ -239,7 +246,7 @@ async def start_server(request: ServerRequest):
         409: {"model": ErrorResponse, "description": "Conflict"},
         500: {"model": ErrorResponse, "description": "Internal server Error"},
     },
-    tags=["CS2 Handlers"]
+    tags=["CS2 Handlers"],
 )
 async def stop_server(request: ServerRequest):
     server_id = request.server_id
@@ -361,7 +368,7 @@ async def stop_server(request: ServerRequest):
         400: {"model": ErrorResponse, "description": "Uncorrected request"},
         500: {"model": ErrorResponse, "description": "Internal server error"},
     },
-    tags=["CS2 Handlers"]
+    tags=["CS2 Handlers"],
 )
 async def execute_commands(request: ServerSettingsRequest):
     try:
@@ -417,7 +424,7 @@ async def execute_commands(request: ServerSettingsRequest):
         400: {"model": ErrorResponse, "description": "Uncorrected request"},
         500: {"model": ErrorResponse, "description": "Internal server error"},
     },
-    tags=["TS3 Handlers"]
+    tags=["TS3 Handlers"],
 )
 async def ts3_new_channel(request: Ts3NewChannelRequest):
     data = request.model_dump(exclude_unset=True)
