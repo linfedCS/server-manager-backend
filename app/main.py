@@ -21,6 +21,7 @@ import asyncssh
 load_dotenv()
 
 HOST_URL = os.getenv("HOST_URL")
+HOST = os.getenv("HOST")
 
 # SSH settings for ts3 server
 TS3_SSH_HOST = os.getenv("TS3_SSH_HOST")
@@ -484,7 +485,7 @@ async def ts3_new_channel(request: Ts3NewChannelRequest):
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",
-        host="localhost",
+        host=HOST,
         port=5000,
         # reload=True,
         workers=6,
