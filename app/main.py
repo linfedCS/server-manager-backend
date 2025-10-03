@@ -212,27 +212,24 @@ async def start_server(request: ServerRequest):
                                     status="success", data=server_data
                                 )
 
-                            error_response = jsonable_encoder(
-                                ErrorResponse(
-                                    status="failed", msg="Couldn't start the server"
-                                )
-                            )
-                            return JSONResponse(status_code=500, content=error_response)
+                            await asyncio.sleep(check_interval)
+                            continue
 
                     except (aiohttp.ClientError, asyncio.TimeoutError):
                         await asyncio.sleep(check_interval)
                         continue
 
-                    await asyncio.sleep(check_interval)
-
                 error_response = jsonable_encoder(
-                    ErrorResponse(status="failed", msg="Request Timeout")
+                    ErrorResponse(
+                        status="failed",
+                        msg="Request Timeout - server didn't start",
+                    )
                 )
                 return JSONResponse(status_code=408, content=error_response)
 
     except asyncssh.Error as e:
         error_response = jsonable_encoder(
-            ErrorResponse(status="error", msg="SSH connection error")
+            ErrorResponse(status="error", msg=f"SSH connection error: {str(e)}")
         )
         return JSONResponse(status_code=500, content=error_response)
 
@@ -334,23 +331,15 @@ async def stop_server(request: ServerRequest):
                                         status="success", data=server_data
                                     )
 
-                                error_response = jsonable_encoder(
-                                    ErrorResponse(
-                                        status="failed", msg="Couldn't stop the server"
-                                    )
-                                )
-                                return JSONResponse(
-                                    status_code=500, content=error_response
-                                )
+                                await asyncio.sleep(check_interval)
+                                continue
 
                     except (aiohttp.ClientError, asyncio.TimeoutError):
                         await asyncio.sleep(check_interval)
                         continue
 
-                    await asyncio.sleep(check_interval)
-
                 error_response = jsonable_encoder(
-                    ErrorResponse(status="failed", msg="Request Timeout")
+                    ErrorResponse(status="failed", msg="Request Timeout - server didn't stop")
                 )
                 return JSONResponse(status_code=408, content=error_response)
 
@@ -494,6 +483,6 @@ if __name__ == "__main__":
         "main:app",
         host=HOST,
         port=5000,
-        # reload=True,
-        workers=6,
+        reload=True,
+        # workers=6,
     )
