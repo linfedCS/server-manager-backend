@@ -573,6 +573,6 @@ if __name__ == "__main__":
         "main:app",
         host=HOST,
         port=5000,
-        reload=True,
-        # workers=6,
+        # reload=True,
+        workers=6,
     )
