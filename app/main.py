@@ -1,5 +1,5 @@
 from datetime import datetime
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from db.database import get_db_connection
 from db.lifespan import lifespan
 from handlers.handler import dispatcher
+from handlers.ts3_parser import parse_channels, parse_clients
 from models.models import *
 import asyncio
 import telnetlib3
@@ -407,7 +408,7 @@ async def execute_commands(request: ServerSettingsRequest):
 
 
 @app.post(
-    "/api/newchannel",
+    "/api/ts3/newchannel",
     response_model=Ts3NewChannelResponse,
     responses={
         400: {"model": ErrorResponse, "description": "Uncorrected request"},
@@ -476,6 +477,95 @@ async def ts3_new_channel(request: Ts3NewChannelRequest):
         Ts3NewChannelResponse(status="success", msg="Channel created successfully")
     )
     return JSONResponse(status_code=200, content=success_response)
+
+
+@app.websocket("/api/ts3/monitoring", name="WebSocket")
+async def ts_monitoring(websocket: WebSocket):
+    await websocket.accept()
+
+    reader = None
+    writer = None
+
+    try:
+        while True:
+            try:
+                reader, writer = await asyncio.wait_for(
+                    telnetlib3.open_connection(TS3_SSH_HOST, TS3_SSH_PORT, encoding='utf8', force_binary=True),
+                    timeout=10.0
+                )
+
+                welcome = await asyncio.wait_for(reader.read(1024), timeout=5.0)
+                print(f"Welcome: {welcome}")
+
+                writer.write(f"login {TS3_SSH_USER} {TS3_SSH_PASS}\n")
+                await writer.drain()
+                auth_response = await asyncio.wait_for(reader.read(1024), timeout=5.0)
+                print(f"Auth: {auth_response}")
+
+                writer.write("use 1\n")
+                await writer.drain()
+                use_response = await asyncio.wait_for(reader.read(1024), timeout=5.0)
+                print(f"Use: {use_response}")
+
+                while True:
+                    writer.write("channellist\n")
+                    await writer.drain()
+                    channel_list_response = await asyncio.wait_for(reader.read(4096), timeout=5.0)
+                    parsed_channel_list = parse_channels(channel_list_response)
+
+                    writer.write("clientlist\n")
+                    await writer.drain()
+                    client_list_response = await asyncio.wait_for(reader.read(4096), timeout=5.0)
+                    parsed_client_list = parse_clients(client_list_response)
+
+                    clients_by_cid = {}
+                    for client in parsed_client_list:
+                        cid = client["cid"]
+                        if cid and client.get("client_type") == 0:
+                            if cid not in clients_by_cid:
+                                clients_by_cid[cid] = []
+                            clients_by_cid[cid].append(client["client_nickname"])
+
+                    result = []
+                    for channel in parsed_channel_list:
+                        result.append({
+                            "channel_name": channel["channel_name"],
+                            "total_clients": channel["total_clients"],
+                            "client_nickname": clients_by_cid.get(channel["cid"], [])
+                        })
+
+                    await websocket.send_json({
+                        "data": result
+                    })
+
+                    await asyncio.sleep(10)
+
+            except (asyncio.TimeoutError, ConnectionError) as e:
+                print(f"TeamSpeak connection error: {e}")
+                if writer:
+                    writer.close()
+                    await writer.wait_closed()
+
+                await asyncio.sleep(5)
+
+    except WebSocketDisconnect:
+        print("Client disconnected")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+    finally:
+        if writer:
+            writer.close()
+            await writer.wait_closed()
+
+@app.get("/api/ts3/monitoring", tags=["TS3 Handlers"], summary="WebSocket Documentation 🌐")
+async def websocket_documentation():
+    """
+    ## WebSocket endpoint. ##
+     - #### **Protocol**: WS ####
+     - #### **Path**: /api/ts3/monitoring ####
+     - #### **Description**: Use this endpoint for WebSocket connection. ####
+    """
+    return {"message": "Этот эндпоинт предназначен для WebSocket соединения. Используйте WebSocket клиент для подключения."}
 
 
 if __name__ == "__main__":
