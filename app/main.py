@@ -423,7 +423,9 @@ async def ts3_new_channel(request: Ts3NewChannelRequest):
         # Подключаемся напрямую к Query порту TeamSpeak
         reader, writer = await telnetlib3.open_connection(
             TS3_SSH_HOST,  # IP вашего TS3 сервера
-            TS3_SSH_PORT,  # Стандартный Query порт
+            TS3_SSH_PORT,
+            encoding='utf8',
+            force_binary=True
         )
 
         # Читаем приветственное сообщение
@@ -443,12 +445,12 @@ async def ts3_new_channel(request: Ts3NewChannelRequest):
         print(f"Use: {use_response}")
 
         # Создаем канал
-        channel_command = f'channelcreate channel_name="{data["channel_name"]}" '
+        channel_command = f'channelcreate channel_name={data["channel_name"]} '
 
         if data.get("channel_pass"):
-            channel_command += f'channel_password="{data["channel_pass"]}" '
+            channel_command += f'channel_password={data["channel_pass"]} '
 
-        channel_command += f"channel_maxclients=-1 " f"channel_delete_delay=600\n"
+        channel_command += f"channel_maxclients=-1 " f"channel_delete_delay=180\n"
 
         writer.write(channel_command)
         await writer.drain()
@@ -573,6 +575,6 @@ if __name__ == "__main__":
         "main:app",
         host=HOST,
         port=5000,
-        # reload=True,
-        workers=6,
+        reload=True,
+        # workers=6,
     )
