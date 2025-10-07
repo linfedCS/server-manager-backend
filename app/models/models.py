@@ -81,6 +81,16 @@ class Ts3NewChannelResponse(BaseModel):
     msg: str
 
 
+class Ts3Monitoring(BaseModel):
+    channel_name: str
+    total_clients: int
+    client_nickname: list[str]
+
+
+class Ts3MonitoringResponse(BaseModel):
+    data: list[Ts3Monitoring]
+
+
 # Decorators for settings
 class SettingsDispatcher:
     def __init__(self):

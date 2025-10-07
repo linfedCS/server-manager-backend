@@ -557,7 +557,7 @@ async def ts_monitoring(websocket: WebSocket):
             writer.close()
             await writer.wait_closed()
 
-@app.get("/api/ts3/monitoring", tags=["TS3 Handlers"], summary="WebSocket Documentation 🌐")
+@app.get("/api/ts3/monitoring", tags=["TS3 Handlers"], summary="WebSocket Documentation 🌐", response_model=Ts3MonitoringResponse)
 async def websocket_documentation():
     """
     ## WebSocket endpoint. ##
