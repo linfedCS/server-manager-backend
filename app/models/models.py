@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, RootModel, ValidationError
+from pydantic import BaseModel, Field, RootModel
 from typing import Any, Dict, List, Optional, Union
 
 

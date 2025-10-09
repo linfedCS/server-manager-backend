@@ -1,19 +1,18 @@
-import asyncio
 from typing import Any, Dict
 from dotenv import load_dotenv
+from core.config import get_settings
 from models.models import *
-import os
 import aiohttp
 import asyncssh
+import asyncio
+
 
 load_dotenv()
-HOST_URL = os.getenv("HOST_URL")
+settings = get_settings()
 
-SSH_HOST = os.getenv("HOST_IP")
-SSH_USER = os.getenv("SSH_USER")
-SSH_PRIVATE_KEY = os.getenv("SSH_KEY")
-if SSH_PRIVATE_KEY is not None:
-    key = SSH_PRIVATE_KEY.encode().decode("unicode_escape")
+
+if settings.ssh_key is not None:
+    key = settings.ssh_key.encode().decode("unicode_escape")
     with open("ssh_key", "w") as file:
         file.write(key)
 
@@ -27,8 +26,8 @@ async def handler_map(data: Dict[int, Any]):
         map_id = data["map_change"]
 
         async with aiohttp.ClientSession() as session:
-            async with session.get(f"{HOST_URL}/api/maps") as map_response, \
-                    session.get(f"{HOST_URL}/api/servers") as servers_response:
+            async with session.get(f"{settings.host_url}/api/maps") as map_response, \
+                    session.get(f"{settings.host_url}/api/servers") as servers_response:
                         maps = await map_response.json()
                         servers = await servers_response.json()
 
@@ -44,7 +43,7 @@ async def handler_map(data: Dict[int, Any]):
             return MapChangeResponse(status="failed", msg="Map already sets")
 
         async with asyncssh.connect(
-            SSH_HOST, username=SSH_USER, client_keys=["ssh_key"], known_hosts=None
+            settings.ssh_host, username=settings.ssh_user, client_keys=["ssh_key"], known_hosts=None
         ) as ssh:
             command = f"cs2-server @prac{server_id} exec map {map_name}"
             result = await ssh.run(command)
@@ -54,7 +53,7 @@ async def handler_map(data: Dict[int, Any]):
 
         async with aiohttp.ClientSession() as session:
             await asyncio.sleep(2)
-            async with session.get(f"{HOST_URL}/api/servers", timeout=5) as response:
+            async with session.get(f"{settings.host_url}/api/servers", timeout=5) as response:
                 servers = await response.json()
                 if server_update := next(
                     (s for s in servers if s.get("server_id") == server_id), None
