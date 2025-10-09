@@ -8,7 +8,7 @@ from models.models import *
 
 import telnetlib3
 import asyncio
-import asyncio
+
 
 settings = get_settings()
 

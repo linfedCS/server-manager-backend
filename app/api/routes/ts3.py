@@ -15,7 +15,7 @@ ts3_service = TS3Service()
     }
 )
 async def ts3_new_channel(request: Ts3NewChannelRequest):
-    return ts3_service.ts3_new_channel(request)
+    return await ts3_service.ts3_new_channel(request)
 
 @router.websocket(
     "/ts3/monitoring"
