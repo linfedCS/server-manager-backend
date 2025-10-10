@@ -20,7 +20,13 @@ class UserService:
         return UserCreateResponse(status="Success", msg="User registered successfully")
 
     def authenticate_user(self, login_user: LoginRequest):
-        ...
+        user_data = login_user.username
+        user_data_form_db = self._get_users_data(user_data)
+
+        if not user_data_form_db:
+            return None
+
+        print(user_data_form_db)
 
     def _get_username_from_db(self, username):
         with get_db_connection() as conn:
@@ -37,3 +43,13 @@ class UserService:
                     "INSERT INTO users (username, email, hashed_password) VALUES (%s, %s, %s)",
                     (username, email, hashed_password)
                 )
+
+    def _get_users_data(self, username):
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM users WHERE username = %s", (username,))
+                users = cur.fetchall()
+                users_columns = [desc[0] for desc in cur.description]
+                users_data = [dict(zip(users_columns, row)) for row in users]
+
+                return users_data
