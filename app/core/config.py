@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     db_host: str = os.getenv("DB_HOST", "")
     db_port: int = os.getenv("DB_PORT", "")
 
+    #Auth
+    secret_token: str = os.getenv("SECRET_TOKEN", "")
+    algorithm: str = os.getenv("ALGORITHM", "")
+
     class Config:
         env_file = ".env"
 

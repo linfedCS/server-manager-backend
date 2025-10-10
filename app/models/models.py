@@ -1,8 +1,9 @@
-from pydantic import BaseModel, Field, RootModel
+from pydantic import BaseModel, Field, RootModel, EmailStr, field_validator
 from typing import Any, Dict, List, Optional, Union
+from enum import Enum
 
 
-#Error class
+# Error class
 class ErrorResponse(BaseModel):
     status: str = Field(None)
     msg: str
@@ -54,7 +55,9 @@ class ServerStopResponse(BaseModel):
 
 class ServerSettingsRequest(BaseModel):
     server_id: int
-    map_change: Optional[int] = Field(None, description="Paste map_id from /maps", alias="map_id")
+    map_change: Optional[int] = Field(
+        None, description="Paste map_id from /maps", alias="map_id"
+    )
 
 
 class MapChangeResponse(BaseModel):
@@ -70,7 +73,7 @@ class ServerSettingsResponse(BaseModel):
     data: SettingsResponse
 
 
-#TS3 server settings
+# TS3 server settings
 class Ts3NewChannelRequest(BaseModel):
     channel_name: str
     channel_pass: Optional[str] = Field(None)
@@ -89,6 +92,63 @@ class Ts3Monitoring(BaseModel):
 
 class Ts3MonitoringResponse(BaseModel):
     data: list[Ts3Monitoring]
+
+
+# Auth
+class UserRole(str, Enum):
+    USER = "user"
+    ADMIN = "admin"
+
+
+class UserBase(BaseModel):
+    username: str = Field(..., min_length=3, max_length=20)
+    email: Optional[EmailStr] = None
+
+
+class UserCreate(UserBase):
+    password: str = Field(..., min_length=6)
+
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v):
+        if len(v) < 6:
+            raise ValueError("Password must be at least 6 characters")
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        return v
+
+class UserCreateResponse(BaseModel):
+    status: str
+    msg: str 
+
+
+class UserInDB(UserBase):
+    hashed_password: str
+    disable: bool = False
+    role: UserRole = UserRole.USER
+    created_at: str
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    expires_in: int
+    username: str
+
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+    role: Optional[UserRole] = None
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
 
 
 # Decorators for settings
@@ -110,5 +170,3 @@ class SettingsDispatcher:
             if field in data and field != "server_id":
                 result[field] = await handler(data)
         return result
-
-

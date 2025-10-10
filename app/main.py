@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 
 from core.config import get_settings
-from api.routes import cs2, ts3
+from api.routes import cs2, ts3, auth
 from models.models import *
 
 
@@ -40,6 +40,7 @@ app.add_middleware(
 
 app.include_router(cs2.router, prefix="/api", tags=["CS2 Handlers"])
 app.include_router(ts3.router, prefix="/api", tags=["TS3 Handlers"])
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication Handlers"])
 
 
 
