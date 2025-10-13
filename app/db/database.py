@@ -56,7 +56,8 @@ def init_pool():
                     hashed_password VARCHAR(255) NOT NULL,
                     disable BOOLEAN DEFAULT FALSE,
                     role VARCHAR DEFAULT 'user',
-                    created_at TIMESTAMP
+                    refresh_token VARCHAR,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """
             )
