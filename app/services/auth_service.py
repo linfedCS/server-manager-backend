@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
-from typing import Optional
 from jose import jwt, JWTError
+from fastapi import Depends, Request, HTTPException
 
 from core.config import get_settings
 from models.models import *
@@ -22,23 +22,34 @@ class AuthService:
 
     def create_access_token(self, data: dict) -> str:
         to_encode = data.copy()
-        expire = datetime.now(timezone.utc) + timedelta(days=30)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
         to_encode.update({"exp": expire})
         encode_jwt = jwt.encode(to_encode, settings.secret_token, settings.algorithm)
         return encode_jwt
 
-    def verify_token(self, token: str) -> Optional[TokenData]:
+    def get_token(request: Request):
+        token = request.cookies.get("user_access_token")
+        if not token:
+            raise HTTPException(status_code=401, detail="Token not found")
+
+        return token
+
+    def verify_token(token: str = Depends(get_token)):
         try:
-            payload = jwt.decode(
-                token, settings.secret_token, algorithms=settings.algorithm
-            )
-            username: str = payload.get("sub")
-            role: str = payload.get("role", UserRole.USER)
+            payload = jwt.decode(token, settings.secret_token, settings.algorithm)
+        except JWTError:
+            raise HTTPException(status_code=401, detail="Invalid token")
 
-            if username is None:
-                return None
+        expire = payload.get("exp")
+        expire_time = datetime.fromtimestamp(int(expire), tz=timezone.utc)
 
-            return TokenData(username=username, role=UserRole(role))
+        if not expire or expire_time < datetime.now(timezone.utc):
+            raise HTTPException(status_code=401, detail="Token expired")
 
-        except (JWTError, ValueError):
-            return None
+        user = payload.get("sub")
+        print(user)
+
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        return user

@@ -1,3 +1,5 @@
+from fastapi import HTTPException, Request, Depends
+
 from db.database import get_db_connection
 from models.models import *
 from services.auth_service import AuthService
@@ -19,14 +21,32 @@ class UserService:
         self._insert_users_into_db(username=username, hashed_password=hashed_password, email=user_create.email)
         return UserCreateResponse(status="Success", msg="User registered successfully")
 
-    def authenticate_user(self, login_user: LoginRequest):
-        user_data = login_user.username
-        user_data_form_db = self._get_users_data(user_data)
+    def authenticate_user(self, login_user: LoginRequest, response):
+        user = login_user.username
+        user_data_form_db = self._get_users_data(user)
 
-        if not user_data_form_db:
-            return None
+        user_data = None
+        for item in user_data_form_db:
+            user_data = item
+            break
 
-        print(user_data_form_db)
+        if not user_data or not user_data["username"] or not auth_service.verify_password(login_user.password, user_data.get("hashed_password")):
+            return ErrorResponse(status="failed", msg="Incorrect username or password")
+
+        access_token = auth_service.create_access_token(data={"sub": user_data["username"], "role": user_data["role"]})
+        response.set_cookie(key="user_access_token", value=access_token, httponly=True)
+
+        return {"access_token": access_token, "refresh_token": None}
+
+
+    def get_user(self, username: str = Depends(auth_service.verify_token)):
+        user = self._get_users_data(username)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        return user
+
+
 
     def _get_username_from_db(self, username):
         with get_db_connection() as conn:

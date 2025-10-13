@@ -123,26 +123,7 @@ class UserCreate(UserBase):
 
 class UserCreateResponse(BaseModel):
     status: str
-    msg: str 
-
-
-class UserInDB(UserBase):
-    hashed_password: str
-    disable: bool = False
-    role: UserRole = UserRole.USER
-    created_at: str
-
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-    expires_in: int
-    username: str
-
-
-class TokenData(BaseModel):
-    username: Optional[str] = None
-    role: Optional[UserRole] = None
+    msg: str
 
 
 class LoginRequest(BaseModel):

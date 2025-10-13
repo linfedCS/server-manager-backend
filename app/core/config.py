@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     #Auth
     secret_token: str = os.getenv("SECRET_TOKEN", "")
     algorithm: str = os.getenv("ALGORITHM", "")
+    access_token_expire_minutes: int = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "")
 
     class Config:
         env_file = ".env"
