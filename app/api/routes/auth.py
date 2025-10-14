@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Response, Depends
+
 from services.user_service import UserService
 from services.auth_service import AuthService
 from models.models import *
@@ -22,6 +23,7 @@ async def login(login_user: LoginRequest, response: Response):
 @router.post("/logout")
 async def logout_user(response: Response):
     response.delete_cookie(key="user_access_token")
+    response.delete_cookie(key="user_refresh_token")
     return {"msg": "Logout success"}
 
 @router.post("/refresh")

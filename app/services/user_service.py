@@ -13,16 +13,19 @@ auth_service = AuthService()
 
 class UserService:
     def register_user(self, user_create: UserCreate, role: UserRole = UserRole.USER):
-        username = user_create.username
-        username_form_db = self._get_username_from_db(username)
+        username_form_db = self._get_username_from_db(user_create.username)
+        email_from_db = self._get_email_from_db(user_create.email)
 
         if username_form_db is not None:
             return ErrorResponse(status="failed", msg="Username already exists")
 
+        if email_from_db is not None:
+            return ErrorResponse(status="failed", msg="Email already exists")
+
         hashed_password = auth_service.get_password_hash(user_create.password)
 
         self._insert_users_into_db(
-            username=username, hashed_password=hashed_password, email=user_create.email
+            username=user_create.username, hashed_password=hashed_password, email=user_create.email, role=role
         )
         return UserCreateResponse(status="Success", msg="User registered successfully")
 
@@ -76,12 +79,22 @@ class UserService:
 
                 return result[0] if result else None
 
-    def _insert_users_into_db(self, username, hashed_password, email):
+    def _get_email_from_db(self, email):
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO users (username, email, hashed_password) VALUES (%s, %s, %s)",
-                    (username, email, hashed_password),
+                    "SELECT email FROM users WHERE email = %s", (email,)
+                )
+                result = cur.fetchall()
+
+                return result[0] if result else None
+
+    def _insert_users_into_db(self, username, hashed_password, email, role):
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO users (username, email, hashed_password, role) VALUES (%s, %s, %s, %s)",
+                    (username, email, hashed_password, role),
                 )
 
     def _insert_refresh_token_into_db(self, username, refresh_token):

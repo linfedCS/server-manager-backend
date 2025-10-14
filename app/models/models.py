@@ -102,7 +102,7 @@ class UserRole(str, Enum):
 
 class UserBase(BaseModel):
     username: str = Field(..., min_length=3, max_length=20)
-    email: Optional[EmailStr] = None
+    email: EmailStr = None
 
 
 class UserCreate(UserBase):
