@@ -126,10 +126,14 @@ class UserCreateResponse(BaseModel):
     msg: str
 
 
+class UserAuthenticatedResponse(BaseModel):
+    status: str
+    msg: str
+
+
 class LoginRequest(BaseModel):
     username: str
     password: str
-
 
 
 # Decorators for settings
