@@ -54,9 +54,11 @@ def init_pool():
                     username VARCHAR(20),
                     email VARCHAR(50) UNIQUE NOT NULL,
                     hashed_password VARCHAR(255) NOT NULL,
-                    disable BOOLEAN DEFAULT FALSE,
+                    is_disable BOOLEAN DEFAULT TRUE,
+                    is_verified BOOLEAN DEFAULT FALSE,
                     role VARCHAR DEFAULT 'user',
-                    created_at TIMESTAMP
+                    refresh_token VARCHAR,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """
             )

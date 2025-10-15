@@ -29,6 +29,17 @@ class Settings(BaseSettings):
     secret_token: str = os.getenv("SECRET_TOKEN", "")
     algorithm: str = os.getenv("ALGORITHM", "")
     access_token_expire_minutes: int = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "")
+    refresh_token_expire_days: int = os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "")
+    email_token_expire_minutes: int = os.getenv("EMAIL_TOKEN_EXPIRE_MINUTES", "")
+
+    #Email
+    mail_username: str = os.getenv("MAIL_USERNAME", "")
+    mail_password: str = os.getenv("MAIL_PASSWORD", "")
+    mail_from: str = os.getenv("MAIL_FROM", "")
+    mail_port: int = os.getenv("MAIL_PORT", "")
+    mail_server: str = os.getenv("MAIL_SERVER", "")
+    mail_starttls: bool = os.getenv("MAIL_STARTTLS", "")
+    mail_ssl_tls: bool = os.getenv("MAIL_SSL_TLS", "")
 
     class Config:
         env_file = ".env"
