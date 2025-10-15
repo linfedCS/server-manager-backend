@@ -136,6 +136,9 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class AuthResponse(BaseModel):
+    detail: list[ErrorResponse]
+
 # Decorators for settings
 class SettingsDispatcher:
     def __init__(self):
