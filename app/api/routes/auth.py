@@ -29,3 +29,12 @@ async def logout_user(response: Response):
 @router.post("/refresh")
 async def refresh_token(response: Response, current_user: str = Depends(auth_service.verify_refresh_token)):
     return auth_service.refresh_token(response, current_user)
+
+@router.get("/profile")
+async def get_profile(current_user: UserPayload = Depends(auth_service.get_current_user)):
+    user_data = {
+        "username": current_user.username,
+        "name": "huy",
+        "age": 23
+    }
+    return user_data

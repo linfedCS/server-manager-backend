@@ -169,6 +169,27 @@ class AuthService:
 
         return {"access_token": new_access_token, "refresh_token": new_refresh_token}
 
+    def get_current_user(self, request: Request) -> UserPayload:
+        token = request.cookies.get("user_access_token")
+
+        if not token:
+            error_response = jsonable_encoder(ErrorResponse(status="failed", msg="Not authenticated"))
+            raise HTTPException(status_code=401, detail=error_response)
+
+        try:
+            payload = jwt.decode(token, settings.secret_token, settings.algorithm)
+            username = payload.get("sub")
+            if username is None:
+                error_response = jsonable_encoder(ErrorResponse(status="failed", msg="Invalid token"))
+                raise HTTPException(status_code=401, detail=error_response)
+            return UserPayload(username=username)
+
+        except JWTError:
+            error_response = jsonable_encoder(
+                ErrorResponse(status="failed", msg="Invalid token")
+            )
+            raise HTTPException(status_code=400, detail=error_response)
+
     def _get_refresh_token_from_db(self, username):
         with get_db_connection() as conn:
             with conn.cursor() as cur:

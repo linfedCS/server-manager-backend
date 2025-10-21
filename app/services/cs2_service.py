@@ -5,6 +5,7 @@ from datetime import datetime
 from db.database import get_db_connection
 from handlers.handler import dispatcher
 from core.config import get_settings
+from services.port_service import PortManager
 from models.models import *
 
 import asyncio
@@ -13,6 +14,7 @@ import aiohttp
 import asyncssh
 
 settings = get_settings()
+docker_port = PortManager()
 
 
 class CS2Service:
@@ -52,6 +54,43 @@ class CS2Service:
                 ErrorResponse(status="error", msg="Internal server error")
             )
             return JSONResponse(status_code=500, content=error_response)
+
+
+    async def create_server(self, request: CreateServerRequest, owner: UserPayload):
+        port = docker_port.get_free_port()
+        
+        try:
+            async with asyncssh.connect(
+                settings.ssh_host,
+                username=settings.ssh_user,
+                client_keys=["ssh_key"],
+                known_hosts=None,
+            ) as ssh:
+                command = f"""docker run -dit --name={request.name} \
+                -e SRCDS_TOKEN="59ACFD1ADF90380EC352C01FD4F48279" \
+                -e CS2_CFG_URL="https://file.linfed.ru/cs2.zip" \
+                -v /home/cs/cs2-docker:/home/steam/cs2-dedicated \
+                -p {port}:27015/tcp -p {port}:27015/udp \
+                joedwards32/cs2"""
+
+                print(command)
+                result = await ssh.run(command)
+
+                if result.stderr:
+                    error_response = jsonable_encoder(ErrorResponse(status="error", msg="SSH Error"))
+                    return JSONResponse(status_code=500, content=error_response)
+
+            occupy_port = docker_port.occupy_port(port=port, container_name=request.name)
+            if not occupy_port:
+                error_response = jsonable_encoder(ErrorResponse(status="failed", msg="Failed to occupy port"))
+                return JSONResponse(status_code=500, content=error_response)
+
+            self._insert_server_into_db(port=port, name=request.name, owner=owner.username)
+
+            return {"status": "success"}
+
+        except Exception as e:
+            return e
 
     async def start_server(self, request: ServerRequest):
         server_id = request.server_id
@@ -300,6 +339,11 @@ class CS2Service:
 
                 return server_list, maps_list
 
+    def _insert_server_into_db(self, name, port, owner):
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("INSERT INTO servers (name, port, owner) VALUES (%s, %s, %s)", (name, port, owner))
+
     async def _check_server_status(self, server, map_name_to_id):
         try:
             address = (server["ip"], server["port"])
@@ -308,7 +352,7 @@ class CS2Service:
 
             return ServerOnline(
                 status="online",
-                server_id=server["server_id"],
+                # server_id=server["server_id"],
                 name=server["name"],
                 ip=server["ip"],
                 port=server["port"],
@@ -319,5 +363,7 @@ class CS2Service:
 
         except Exception as e:
             return ServerOffline(
-                status="offline", server_id=server["server_id"], name=server["name"]
+                status="offline",
+                # server_id=server["server_id"],
+                name=server["name"]
             )

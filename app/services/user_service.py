@@ -1,4 +1,4 @@
-from fastapi import HTTPException, Response, BackgroundTasks
+from fastapi import HTTPException, Response, Request, BackgroundTasks
 from fastapi.responses import RedirectResponse
 from fastapi.encoders import jsonable_encoder
 
@@ -129,6 +129,7 @@ class UserService:
 
         except HTTPException:
             raise
+
 
     def _get_username_from_db(self, username):
         with get_db_connection() as conn:

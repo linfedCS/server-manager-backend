@@ -1,9 +1,11 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from services.cs2_service import CS2Service
+from services.auth_service import AuthService
 from models.models import *
 
 router = APIRouter()
 cs2_service = CS2Service()
+auth_service = AuthService()
 
 @router.get(
     "/servers",
@@ -60,3 +62,8 @@ async def stop_server(request: ServerRequest):
 )
 async def execute_commands(request: ServerSettingsRequest):
     return cs2_service.execute_commands(request)
+
+@router.post("/create-server")
+async def create_server(request: CreateServerRequest, owner: UserPayload = Depends(auth_service.get_current_user)):
+    return await cs2_service.create_server(request=request, owner=owner)
+    # return {"status": "success", "owner": owner.username}

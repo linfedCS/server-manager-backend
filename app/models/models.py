@@ -11,7 +11,7 @@ class ErrorResponse(BaseModel):
 
 class ServerOnline(BaseModel):
     status: str = Field("online")
-    server_id: int
+    # server_id: int
     name: str
     ip: str
     port: int
@@ -22,7 +22,7 @@ class ServerOnline(BaseModel):
 
 class ServerOffline(BaseModel):
     status: str = Field("offline")
-    server_id: int
+    # server_id: int
     name: str
 
 
@@ -37,6 +37,11 @@ class MapItem(BaseModel):
 
 class MapsResponse(BaseModel):
     item: List[MapItem]
+
+
+class CreateServerRequest(BaseModel):
+    name: str
+    # password: str
 
 
 class ServerRequest(BaseModel):
@@ -95,6 +100,10 @@ class Ts3MonitoringResponse(BaseModel):
 
 
 # Auth
+class UserPayload(BaseModel):
+    username: str
+
+
 class UserRole(str, Enum):
     USER = "user"
     ADMIN = "admin"
