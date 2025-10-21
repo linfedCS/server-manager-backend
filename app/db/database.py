@@ -58,7 +58,7 @@ def init_pool():
                     is_verified BOOLEAN DEFAULT FALSE,
                     role VARCHAR DEFAULT 'user',
                     refresh_token VARCHAR,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                 )
             """
             )
@@ -69,8 +69,8 @@ def init_pool():
                     port INTEGER,
                     is_occupied BOOLEAN DEFAULT FALSE,
                     container_name TEXT,
-                    occupied_at TIMESTAMP DEFAULT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    occupied_at TIMESTAMPTZ DEFAULT NULL,
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                 )
 """
             )

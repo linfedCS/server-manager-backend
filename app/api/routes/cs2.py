@@ -17,6 +17,10 @@ auth_service = AuthService()
 async def list_servers():
     return await cs2_service.list_servers()
 
+@router.get("/servers-by-owner")
+async def list_servers_by_owner(owner: UserPayload = Depends(auth_service.get_current_user)):
+    return await cs2_service.list_server_by_owner(owner)
+
 @router.get(
     "/maps",
     response_model=List[MapItem],

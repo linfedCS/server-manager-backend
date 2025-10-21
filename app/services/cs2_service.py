@@ -37,6 +37,25 @@ class CS2Service:
             )
             return JSONResponse(status_code=500, content=error_response)
 
+    async def list_server_by_owner(self, owner: UserPayload):
+        try:
+            servers, maps = self._fetch_servers_by_owner(owner=owner.username)
+            map_name_to_id = {map_item["name"]: map_item["map_id"] for map_item in maps}
+
+            result = await asyncio.gather(
+                *(
+                    self._check_server_status(server, map_name_to_id)
+                    for server in servers
+                )
+            )
+            return result
+
+        except Exception as e:
+            error_response = jsonable_encoder(
+                ErrorResponse(status="error", msg=f"Internal server error: {e}")
+            )
+            return JSONResponse(status_code=500, content=error_response)
+
     async def list_maps(self):
         try:
             with get_db_connection() as conn:
@@ -55,11 +74,10 @@ class CS2Service:
             )
             return JSONResponse(status_code=500, content=error_response)
 
-
     async def create_server(self, request: CreateServerRequest, owner: UserPayload):
-        port = docker_port.get_free_port()
-        
+
         try:
+            port = docker_port.get_free_port()
             async with asyncssh.connect(
                 settings.ssh_host,
                 username=settings.ssh_user,
@@ -73,24 +91,93 @@ class CS2Service:
                 -p {port}:27015/tcp -p {port}:27015/udp \
                 joedwards32/cs2"""
 
-                print(command)
                 result = await ssh.run(command)
-
                 if result.stderr:
-                    error_response = jsonable_encoder(ErrorResponse(status="error", msg="SSH Error"))
+                    error_response = jsonable_encoder(
+                        ErrorResponse(status="error", msg="SSH Error")
+                    )
                     return JSONResponse(status_code=500, content=error_response)
 
-            occupy_port = docker_port.occupy_port(port=port, container_name=request.name)
-            if not occupy_port:
-                error_response = jsonable_encoder(ErrorResponse(status="failed", msg="Failed to occupy port"))
-                return JSONResponse(status_code=500, content=error_response)
+                self._insert_server_into_db(
+                    port=port, name=request.name, owner=owner.username
+                )
 
-            self._insert_server_into_db(port=port, name=request.name, owner=owner.username)
+                timeout_seconds = 60
+                check_interval = 1
+                start_time = datetime.now()
 
-            return {"status": "success"}
+                async with aiohttp.ClientSession() as session:
+                    while (datetime.now() - start_time).seconds < timeout_seconds:
+                        try:
+                            async with session.get(
+                                f"{settings.host_url}/api/servers", timeout=5
+                            ) as response:
+                                servers = await response.json()
+                                server = next(
+                                    (
+                                        s
+                                        for s in servers
+                                        if s.get("name") == request.name
+                                    ),
+                                    None,
+                                )
+                                if not server:
+                                    error_response = jsonable_encoder(
+                                        ErrorResponse(
+                                            status="error", msg="Server not found"
+                                        )
+                                    )
+                                    return JSONResponse(
+                                        status_code=400, content=error_response
+                                    )
 
-        except Exception as e:
-            return e
+                                if server.get("status") == "online":
+                                    server_data = ServerOnline(**server)
+
+                                    occupy_port = docker_port.occupy_port(
+                                        port=port, container_name=request.name
+                                    )
+                                    if not occupy_port:
+                                        await docker_port.release_port(request.name)
+                                        error_response = jsonable_encoder(
+                                            ErrorResponse(
+                                                status="failed",
+                                                msg="Failed to occupy port",
+                                            )
+                                        )
+                                        return JSONResponse(
+                                            status_code=500, content=error_response
+                                        )
+
+                                    asyncio.create_task(
+                                        self._monitoring_server_activity(request.name)
+                                    )
+
+                                    return ServerStartResponse(
+                                        status="success", data=server_data
+                                    )
+
+                                await asyncio.sleep(check_interval)
+                                continue
+
+                        except (aiohttp.ClientError, asyncio.TimeoutError):
+                            await asyncio.sleep(check_interval)
+                            continue
+
+                    await self._delete_server_container(request.name)
+                    error_response = jsonable_encoder(
+                        ErrorResponse(
+                            status="failed",
+                            msg="Request Timeout - server didn't start",
+                        )
+                    )
+                    return JSONResponse(status_code=408, content=error_response)
+
+        except asyncssh.Error as e:
+            error_response = jsonable_encoder(
+                ErrorResponse(status="error", msg=f"SSH connection error: {str(e)}")
+            )
+            return JSONResponse(status_code=500, content=error_response)
 
     async def start_server(self, request: ServerRequest):
         server_id = request.server_id
@@ -187,7 +274,9 @@ class CS2Service:
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"{settings.host_url}/api/servers", timeout=5) as response:
+                async with session.get(
+                    f"{settings.host_url}/api/servers", timeout=5
+                ) as response:
                     servers = await response.json()
                     server = next(
                         (s for s in servers if s.get("server_id") == server_id), None
@@ -217,7 +306,10 @@ class CS2Service:
 
         try:
             async with asyncssh.connect(
-                settings.ssh_host, username=settings.ssh_user, client_keys=["ssh_key"], known_hosts=None
+                settings.ssh_host,
+                username=settings.ssh_user,
+                client_keys=["ssh_key"],
+                known_hosts=None,
             ) as ssh:
                 result = await ssh.run(f"cs2-server @prac{server_id} stop")
 
@@ -240,7 +332,11 @@ class CS2Service:
                                 servers = await response.json()
 
                                 if server := next(
-                                    (s for s in servers if s.get("server_id") == server_id),
+                                    (
+                                        s
+                                        for s in servers
+                                        if s.get("server_id") == server_id
+                                    ),
                                     None,
                                 ):
                                     if not server:
@@ -268,7 +364,9 @@ class CS2Service:
                             continue
 
                     error_response = jsonable_encoder(
-                        ErrorResponse(status="failed", msg="Request Timeout - server didn't stop")
+                        ErrorResponse(
+                            status="failed", msg="Request Timeout - server didn't stop"
+                        )
                     )
                     return JSONResponse(status_code=408, content=error_response)
 
@@ -339,10 +437,33 @@ class CS2Service:
 
                 return server_list, maps_list
 
+    def _fetch_servers_by_owner(self, owner):
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM servers WHERE owner = %s", (owner,))
+                servers = cur.fetchall()
+                servers_colums = [desc[0] for desc in cur.description]
+                server_list = [dict(zip(servers_colums, row)) for row in servers]
+
+                cur.execute("SELECT name, map_id FROM maps")
+                maps = cur.fetchall()
+                maps_colums = [desc[0] for desc in cur.description]
+                maps_list = [dict(zip(maps_colums, row)) for row in maps]
+
+                return server_list, maps_list
+
     def _insert_server_into_db(self, name, port, owner):
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("INSERT INTO servers (name, port, owner) VALUES (%s, %s, %s)", (name, port, owner))
+                cur.execute(
+                    "INSERT INTO servers (name, port, owner) VALUES (%s, %s, %s)",
+                    (name, port, owner),
+                )
+
+    def _delete_server_from_db(sefl, server_name: str):
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM servers WHERE name = %s", (server_name,))
 
     async def _check_server_status(self, server, map_name_to_id):
         try:
@@ -365,5 +486,63 @@ class CS2Service:
             return ServerOffline(
                 status="offline",
                 # server_id=server["server_id"],
-                name=server["name"]
+                name=server["name"],
             )
+
+    async def _monitoring_server_activity(self, server_name: str):
+        empty_minute = 0
+        max_empty_minute = 5
+
+        async with aiohttp.ClientSession() as session:
+            while empty_minute < max_empty_minute:
+                await asyncio.sleep(60)
+
+                try:
+                    async with session.get(
+                        f"{settings.host_url}/api/servers", timeout=5
+                    ) as response:
+                        servers = await response.json()
+                        server = next(
+                            (s for s in servers if s.get("name") == server_name),
+                            None,
+                        )
+
+                        if not server:
+                            return
+
+                        players_current = server.get("players_current")
+
+                        if players_current == 0:
+                            empty_minute += 1
+                        else:
+                            if empty_minute > 0:
+                                empty_minute = 0
+
+                except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                    continue
+
+        await self._delete_server_container(server_name)
+
+    async def _delete_server_container(self, server_name: str):
+        try:
+            async with asyncssh.connect(
+                settings.ssh_host,
+                username=settings.ssh_user,
+                client_keys=["ssh_key"],
+                known_hosts=None,
+            ) as ssh:
+                stop_command = f"docker stop {server_name}"
+                await ssh.run(stop_command)
+
+                rm_command = f"docker rm {server_name}"
+                result = await ssh.run(rm_command)
+
+                if result.stderr:
+                    return False
+
+                docker_port.release_port(server_name)
+                self._delete_server_from_db(server_name)
+
+                return True
+        except asyncssh.Error as e:
+            return False
