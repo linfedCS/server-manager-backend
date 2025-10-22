@@ -39,8 +39,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(cs2.router, prefix="/api", tags=["CS2 Handlers"])
-app.include_router(ts3.router, prefix="/api", tags=["TS3 Handlers"])
+app.include_router(cs2.router, prefix="/api/cs2", tags=["CS2 Handlers"])
+app.include_router(ts3.router, prefix="/api/ts3", tags=["TS3 Handlers"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication Handlers"])
 
 
