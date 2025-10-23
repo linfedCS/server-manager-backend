@@ -110,7 +110,7 @@ class CS2Service:
                     while (datetime.now() - start_time).seconds < timeout_seconds:
                         try:
                             async with session.get(
-                                f"{settings.host_url}/api/servers", timeout=5
+                                f"{settings.host_url}/api/cs2/servers", timeout=5
                             ) as response:
                                 servers = await response.json()
                                 server = next(
@@ -499,7 +499,7 @@ class CS2Service:
 
                 try:
                     async with session.get(
-                        f"{settings.host_url}/api/servers", timeout=5
+                        f"{settings.host_url}/api/cs2/servers", timeout=5
                     ) as response:
                         servers = await response.json()
                         server = next(
