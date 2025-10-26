@@ -179,10 +179,11 @@ class AuthService:
         try:
             payload = jwt.decode(token, settings.secret_token, settings.algorithm)
             username = payload.get("sub")
+            role = payload.get("role")
             if username is None:
                 error_response = jsonable_encoder(ErrorResponse(status="failed", msg="Invalid token"))
                 raise HTTPException(status_code=401, detail=error_response)
-            return UserPayload(username=username)
+            return UserPayload(username=username, role=role)
 
         except JWTError:
             error_response = jsonable_encoder(

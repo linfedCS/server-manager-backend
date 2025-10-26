@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     mail_starttls: bool = os.getenv("MAIL_STARTTLS", "")
     mail_ssl_tls: bool = os.getenv("MAIL_SSL_TLS", "")
 
+    #RCON
+    rcon_password: str = os.getenv("RCON_PASSWORD", "")
+
+    #Steam
+    steam_web_api_key: str = os.getenv("STEAM_WEB_API_KEY", "")
+
     class Config:
         env_file = ".env"
 

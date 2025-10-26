@@ -17,9 +17,10 @@ auth_service = AuthService()
 async def list_servers():
     return await cs2_service.list_servers()
 
+
 @router.get("/servers-by-owner")
-async def list_servers_by_owner(owner: UserPayload = Depends(auth_service.get_current_user)):
-    return await cs2_service.list_server_by_owner(owner)
+async def list_servers_by_owner(current_user: UserPayload = Depends(auth_service.get_current_user)):
+    return await cs2_service.list_server_by_owner(owner=current_user.username)
 
 @router.get(
     "/maps",
@@ -65,7 +66,7 @@ async def stop_server(request: ServerRequest):
     }
 )
 async def execute_commands(request: ServerSettingsRequest):
-    return cs2_service.execute_commands(request)
+    return await cs2_service.execute_commands(request)
 
 @router.post("/create-server")
 async def create_server(request: CreateServerRequest, owner: UserPayload = Depends(auth_service.get_current_user)):

@@ -34,7 +34,10 @@ def init_pool():
                     name TEXT,
                     ip TEXT DEFAULT 'linfed.ru',
                     port INTEGER,
-                    owner VARCHAR
+                    owner VARCHAR,
+                    static BOOLEAN DEFAULT FALSE,
+                    server_steamid BIGINT,
+                    srcd_token CHAR(32)
                 )
             """
             )
