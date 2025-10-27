@@ -6,6 +6,7 @@ import os
 class Settings(BaseSettings):
     host_url: str = os.getenv("HOST_URL", "")
     host: str = os.getenv("HOST", "")
+    open_api_url: str = os.getenv("OPEN_API_URL", "")
 
     #TS3 Settings Connection
     ts3_host: str = os.getenv("TS3_HOST", "")
