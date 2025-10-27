@@ -25,6 +25,8 @@ class CS2Service:
             servers, maps = self._fetch_servers_and_maps()
             map_name_to_id = {map_item["name"]: map_item["map_id"] for map_item in maps}
 
+            servers = [server for server in servers if server.get("static") is True]
+
             results = await asyncio.gather(
                 *(
                     self._check_server_status(server, map_name_to_id)
@@ -78,9 +80,11 @@ class CS2Service:
 
     async def create_server(self, request: CreateServerRequest, owner):
         try:
-            server_steamid, srcd_token = await steam.get_srcds_token(server_name=request.name)
+            server_steamid, srcd_token = await steam.get_srcds_token(
+                server_name=request.server_name
+            )
 
-            server_name = self._get_name_server_from_db(name=request.name)
+            server_name = self._get_name_server_from_db(name=request.server_name)
             if server_name is not None:
                 error_response = jsonable_encoder(
                     ErrorResponse(status="failed", msg="Server name already exists")
@@ -95,7 +99,7 @@ class CS2Service:
                 client_keys=["ssh_key"],
                 known_hosts=None,
             ) as ssh:
-                command = f"""docker run -dit --name={request.name} \
+                command = f"""docker run -dit --name={request.server_name} \
                 -e SRCDS_TOKEN="{srcd_token}" \
                 -e CS2_CFG_URL="https://file.linfed.ru/cs2.zip" \
                 -e CS2_RCONPW="{settings.rcon_password}" \
@@ -112,15 +116,15 @@ class CS2Service:
 
                 self._insert_server_into_db(
                     port=port,
-                    name=request.name,
+                    name=request.server_name,
                     owner=owner.username,
                     static=request.static,
                     server_steamid=server_steamid,
-                    srcd_token=srcd_token
+                    srcd_token=srcd_token,
                 )
 
                 occupy_port = docker_port.occupy_port(
-                    port=port, container_name=request.name
+                    port=port, container_name=request.server_name
                 )
                 if not occupy_port:
                     error_response = jsonable_encoder(
@@ -146,7 +150,7 @@ class CS2Service:
                                     (
                                         s
                                         for s in servers
-                                        if s.get("server_name") == request.name
+                                        if s.get("server_name") == request.server_name
                                     ),
                                     None,
                                 )
@@ -167,7 +171,7 @@ class CS2Service:
                                         print("started task")
                                         asyncio.create_task(
                                             self._monitoring_server_activity(
-                                                request.name
+                                                request.server_name
                                             )
                                         )
 
@@ -182,7 +186,7 @@ class CS2Service:
                             await asyncio.sleep(check_interval)
                             continue
 
-                    await self._delete_server_container(request.name)
+                    await self._delete_server_container(request.server_name)
                     error_response = jsonable_encoder(
                         ErrorResponse(
                             status="failed",
@@ -297,7 +301,8 @@ class CS2Service:
                 ) as response:
                     servers = await response.json()
                     server = next(
-                        (s for s in servers if s.get("server_name") == server_name), None
+                        (s for s in servers if s.get("server_name") == server_name),
+                        None,
                     )
                     if not server:
                         error_response = jsonable_encoder(
@@ -382,9 +387,7 @@ class CS2Service:
                             continue
 
                     error_response = jsonable_encoder(
-                        ErrorResponse(
-                            status="failed", msg="Request Timeout"
-                        )
+                        ErrorResponse(status="failed", msg="Request Timeout")
                     )
                     return JSONResponse(status_code=408, content=error_response)
 
@@ -481,12 +484,16 @@ class CS2Service:
     def _get_server_steam_id_from_db(self, server_name):
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT server_steamid FROM servers WHERE name = %s", (server_name,))
+                cur.execute(
+                    "SELECT server_steamid FROM servers WHERE name = %s", (server_name,)
+                )
                 result = cur.fetchone()
 
                 return result
 
-    def _insert_server_into_db(self, name, port, owner, static, server_steamid, srcd_token):
+    def _insert_server_into_db(
+        self, name, port, owner, static, server_steamid, srcd_token
+    ):
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -581,6 +588,9 @@ class CS2Service:
                 docker_port.release_port(server_name)
                 self._delete_server_from_db(server_name)
 
-                return True
+                return DeleteServerResponse(
+                    status="success",
+                    msg=f"Server {server_name} was successfully deleted",
+                )
         except asyncssh.Error as e:
             return False

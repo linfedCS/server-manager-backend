@@ -42,14 +42,23 @@ class MapsResponse(BaseModel):
 
 
 class CreateServerRequest(BaseModel):
-    name: str
-    static: bool = Field(False)
+    server_name: str
+    static: bool = Field(False, description="Only for admins")
     # password: str
 
 
 class CreateServerResponse(BaseModel):
     status: str
     data: ServerOnline
+
+
+class DeleteServerRequest(BaseModel):
+    server_name: str
+
+
+class DeleteServerResponse(BaseModel):
+    status: str
+    msg: str
 
 
 class ServerRequest(BaseModel):
