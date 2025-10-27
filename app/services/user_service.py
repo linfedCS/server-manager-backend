@@ -1,4 +1,4 @@
-from fastapi import HTTPException, Response, BackgroundTasks
+from fastapi import HTTPException, Response, Request, BackgroundTasks
 from fastapi.responses import RedirectResponse
 from fastapi.encoders import jsonable_encoder
 
@@ -6,9 +6,9 @@ from db.database import get_db_connection
 from models.models import *
 from services.auth_service import AuthService
 from services.email_service import send_verification_email
-from core.config import Settings
+from core.config import get_settings
 
-settings = Settings()
+settings = get_settings()
 auth_service = AuthService()
 
 
@@ -27,13 +27,13 @@ class UserService:
             error_response = jsonable_encoder(
                 ErrorResponse(status="failed", msg="Username already exists")
             )
-            raise HTTPException(status_code=404, detail=error_response)
+            raise HTTPException(status_code=409, detail=error_response)
 
         if email_from_db is not None:
             error_response = jsonable_encoder(
                 ErrorResponse(status="failed", msg="Email already exists")
             )
-            raise HTTPException(status_code=404, detail=error_response)
+            raise HTTPException(status_code=409, detail=error_response)
 
         hashed_password = auth_service.get_password_hash(user_create.password)
 
@@ -129,6 +129,7 @@ class UserService:
 
         except HTTPException:
             raise
+
 
     def _get_username_from_db(self, username):
         with get_db_connection() as conn:

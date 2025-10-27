@@ -11,8 +11,9 @@ class ErrorResponse(BaseModel):
 
 class ServerOnline(BaseModel):
     status: str = Field("online")
-    server_id: int
-    name: str
+    owner: str
+    static: bool = Field(False)
+    server_name: str
     ip: str
     port: int
     map_id: int
@@ -22,8 +23,9 @@ class ServerOnline(BaseModel):
 
 class ServerOffline(BaseModel):
     status: str = Field("offline")
-    server_id: int
-    name: str
+    owner: str
+    static: bool = Field(False)
+    server_name: str
 
 
 class ServerResponse(RootModel):
@@ -39,8 +41,28 @@ class MapsResponse(BaseModel):
     item: List[MapItem]
 
 
+class CreateServerRequest(BaseModel):
+    server_name: str
+    static: bool = Field(False, description="Only for admins")
+    # password: str
+
+
+class CreateServerResponse(BaseModel):
+    status: str
+    data: ServerOnline
+
+
+class DeleteServerRequest(BaseModel):
+    server_name: str
+
+
+class DeleteServerResponse(BaseModel):
+    status: str
+    msg: str
+
+
 class ServerRequest(BaseModel):
-    server_id: int
+    server_name: str
 
 
 class ServerStartResponse(BaseModel):
@@ -54,7 +76,7 @@ class ServerStopResponse(BaseModel):
 
 
 class ServerSettingsRequest(BaseModel):
-    server_id: int
+    server_name: str
     map_change: Optional[int] = Field(
         None, description="Paste map_id from /maps", alias="map_id"
     )
@@ -95,6 +117,11 @@ class Ts3MonitoringResponse(BaseModel):
 
 
 # Auth
+class UserPayload(BaseModel):
+    username: str
+    role: str
+
+
 class UserRole(str, Enum):
     USER = "user"
     ADMIN = "admin"

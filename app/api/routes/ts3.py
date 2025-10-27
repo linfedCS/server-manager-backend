@@ -7,7 +7,7 @@ router = APIRouter()
 ts3_service = TS3Service()
 
 @router.post(
-    "/ts3/newchannel",
+    "/newchannel",
     response_model=Ts3NewChannelResponse,
     responses={
         400: {"model": ErrorResponse, "description": "Uncorrected request"},
@@ -18,12 +18,12 @@ async def ts3_new_channel(request: Ts3NewChannelRequest):
     return await ts3_service.ts3_new_channel(request)
 
 @router.websocket(
-    "/ts3/monitoring"
+    "/monitoring"
 )
 async def ts_monitoring(websocket: WebSocket):
     return await ts3_service.ts_monitoring(websocket)
 
-@router.get("/ts3/monitoring", tags=["TS3 Handlers"], summary="WebSocket Documentation 🌐", response_model=Ts3MonitoringResponse)
+@router.get("/monitoring", tags=["TS3 Handlers"], summary="WebSocket Documentation 🌐", response_model=Ts3MonitoringResponse)
 async def websocket_documentation():
     """
     ## WebSocket endpoint. ##
