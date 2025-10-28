@@ -69,7 +69,11 @@ app.add_middleware(
 @app.get("/api/docs", response_class=HTMLResponse, )
 async def get_docs(username: str = Depends(authenticate)):
     from fastapi.openapi.docs import get_swagger_ui_html
-    return get_swagger_ui_html(openapi_url=f"{settings.open_api_url}/openapi.json", title="Docs")
+    return get_swagger_ui_html(openapi_url=f"/api/openapi.json", title="Docs")
+
+@app.get("/api/openapi.json")
+async def get_openapi(username: str = Depends(authenticate)):
+    return app.openapi()
 
 app.include_router(cs2.router, prefix="/api/cs2", tags=["CS2 Handlers"])
 app.include_router(ts3.router, prefix="/api/ts3", tags=["TS3 Handlers"])
