@@ -43,8 +43,8 @@ class MapsResponse(BaseModel):
 
 class CreateServerRequest(BaseModel):
     server_name: str
+    password: str = Field(...)
     static: bool = Field(False, description="Only for admins")
-    # password: str
 
 
 class CreateServerResponse(BaseModel):

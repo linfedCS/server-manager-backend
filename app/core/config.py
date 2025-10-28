@@ -6,7 +6,6 @@ import os
 class Settings(BaseSettings):
     host_url: str = os.getenv("HOST_URL", "")
     host: str = os.getenv("HOST", "")
-    open_api_url: str = os.getenv("OPEN_API_URL", "")
 
     #TS3 Settings Connection
     ts3_host: str = os.getenv("TS3_HOST", "")
@@ -51,6 +50,9 @@ class Settings(BaseSettings):
     #Docs
     docs_admin_username: str = os.getenv("ADMIN_USERNAME", "")
     docs_admin_password: str = os.getenv("ADMIN_PASSWORD", "")
+
+    #Monitoring server activity
+    max_empty_minute: int = os.getenv("MAX_EMPTY_MINUTE", "")
 
     class Config:
         env_file = ".env"

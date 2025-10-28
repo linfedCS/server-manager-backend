@@ -65,16 +65,16 @@ class SteamService:
 
             except aiohttp.ClientResponseError as e:
                 error_response = jsonable_encoder(
-                    ErrorResponse(status=f"HTTP error: {e.status} - {e.message}")
+                    ErrorResponse(status="failed", msg=f"HTTP error: {e.status} - {e.message}")
                 )
                 raise HTTPException(status_code=..., detail=error_response)
             except aiohttp.ClientError as e:
                 error_response = jsonable_encoder(
-                    ErrorResponse(status=f"Network error: {e}")
+                    ErrorResponse(status="failed", msg=f"Network error: {e}")
                 )
-                raise HTTPException(status_code=..., detail=error_response)
+                raise HTTPException(status_code=520, detail=error_response)
             except Exception as e:
                 error_response = jsonable_encoder(
-                    ErrorResponse(status=f"Unexpected error: {e}")
+                    ErrorResponse(status="failed", msg=f"Unexpected error: {e}")
                 )
-                raise HTTPException(status_code=..., detail=error_response)
+                raise HTTPException(status_code=520, detail=error_response)
