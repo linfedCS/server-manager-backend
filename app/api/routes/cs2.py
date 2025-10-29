@@ -25,6 +25,10 @@ async def list_servers():
 async def list_servers_by_owner(
     current_user: UserPayload = Depends(auth_service.get_current_user),
 ):
+    """
+     - #### **Required**: /api/auth/login ####
+    """
+    
     return await cs2_service.list_server_by_owner(owner=current_user.username)
 
 
@@ -55,6 +59,10 @@ async def create_server(
     request: CreateServerRequest,
     owner: UserPayload = Depends(auth_service.get_current_user),
 ):
+    """
+     - #### **Required**: /api/auth/login ####
+    """
+
     return await cs2_service.create_server(request=request, owner=owner)
 
 
@@ -69,6 +77,10 @@ async def delete_server(
     request: DeleteServerRequest,
     current_user: UserPayload = Depends(auth_service.get_current_user),
 ):
+    """
+     - #### **Required**: /api/auth/login ####
+    """
+
     if current_user:
         if current_user.role != "admin":
             error_response = jsonable_encoder(
