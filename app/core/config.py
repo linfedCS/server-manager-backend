@@ -4,6 +4,10 @@ from typing import Optional
 import os
 
 class Settings(BaseSettings):
+    #ENV
+    environment: str = os.getenv("ENV", "")
+    
+    #Host
     host_url: str = os.getenv("HOST_URL", "")
     host: str = os.getenv("HOST", "")
 

@@ -10,11 +10,14 @@ from api.routes import cs2, ts3, auth
 from models.models import *
 
 import secrets
+import os
 
 
 load_dotenv()
 settings = get_settings()
 security = HTTPBasic()
+
+environment = os.getenv("ENV") != "production"
 
 def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
     current_username_bytes = credentials.username.encode("utf8")
@@ -53,6 +56,7 @@ app = FastAPI(
         {"url": f"{settings.host_url}"},
     ],
     openapi_tags=[
+        {"name": "Authentication Handlers", "description": ""},
         {"name": "CS2 Handlers", "description": ""},
         {"name": "TS3 Handlers", "description": ""},
     ],
@@ -75,9 +79,9 @@ async def get_docs(username: str = Depends(authenticate)):
 async def get_openapi(username: str = Depends(authenticate)):
     return app.openapi()
 
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication Handlers"])
 app.include_router(cs2.router, prefix="/api/cs2", tags=["CS2 Handlers"])
 app.include_router(ts3.router, prefix="/api/ts3", tags=["TS3 Handlers"])
-app.include_router(auth.router, prefix="/api/auth", tags=["Authentication Handlers"])
 
 
 
@@ -87,6 +91,6 @@ if __name__ == "__main__":
         "main:app",
         host=settings.host,
         port=5000,
-        reload=True,
-        # workers=6,
+        workers=None if environment else 6,
+        reload=environment,
     )

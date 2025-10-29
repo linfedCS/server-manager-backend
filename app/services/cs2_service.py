@@ -112,7 +112,7 @@ class CS2Service:
                         msg="Failed to occupy port",
                     )
                 )
-                return JSONResponse(status_code=500, content=error_response)
+                return JSONResponse(status_code=503, content=error_response)
 
             async with asyncssh.connect(
                 settings.ssh_host,
@@ -571,6 +571,13 @@ class CS2Service:
 
     async def _delete_server_container(self, server_name: str):
         try:
+            server = self._get_name_server_from_db(name=server_name)
+            if server is not None:
+                error_response = jsonable_encoder(
+                    ErrorResponse(status="failed", msg="Server not found")
+                )
+                return JSONResponse(status_code=400, content=error_response)
+
             async with asyncssh.connect(
                 settings.ssh_host,
                 username=settings.ssh_user,
@@ -588,7 +595,7 @@ class CS2Service:
 
             server_steamid = self._get_server_steam_id_from_db(server_name)
             await steam.delete_srcds_token(server_steamid)
-            
+
             docker_port.release_port(server_name)
             self._delete_server_from_db(server_name)
 
